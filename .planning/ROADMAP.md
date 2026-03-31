@@ -41,7 +41,10 @@ Plans:
   3. Holding a Solo button on an already-soloed track temporarily unsolos that track while held; releasing restores solo
   4. Holding a Mute button on an already-muted track temporarily unmutes that track while held; releasing restores mute
   5. The Solo and Mute button LEDs reflect the actual track state in real time throughout a momentary hold
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 02-01-PLAN.md — Implement toggle/momentary state machine, shift guards, and timer countdown
 
 ### Phase 3: Hardening
 **Goal**: The feature works reliably under simultaneous multi-track holds and edge cases encountered in live performance: rapid presses, shift pressed mid-hold, exclusive-solo propagation, and component disable mid-press
@@ -62,5 +65,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Scaffolding | 0/1 | Not started | - |
-| 2. Core Logic | 0/TBD | Not started | - |
+| 2. Core Logic | 0/1 | Not started | - |
 | 3. Hardening | 0/TBD | Not started | - |
