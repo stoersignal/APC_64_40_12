@@ -1,398 +1,339 @@
 # Architecture Patterns
 
-**Domain:** Toggle/Momentary button behavior in Ableton _Framework control surface script
+**Domain:** 16-parameter encoder control + toggle/momentary Send A/B/C in Ableton _Framework control surface script
+**Milestone:** v1.1 16Macros
 **Researched:** 2026-03-31
-**Confidence:** HIGH — based on direct source analysis of existing codebase
+**Confidence:** HIGH — based on direct source analysis of codebase plus verified Framework source
 
 ---
 
-## Recommended Architecture
+## Context: What Already Exists
 
-Add a new `ToggleMomentaryChannelStripComponent` class that extends the existing
-`SpecialChanStripComponent`. All timing logic lives at the channel strip (per-track)
-component level. The composition layer (`APC_64_40_9.py`) changes only the factory
-method inside `SpecialMixerComponent`.
+The v1.0 codebase ships two hardware encoder rows and an encoder mode system:
 
-This mirrors the already-proven pattern used by `SpecialChanStripComponent` for
-fold-delay detection and by `EncModeSelectorComponent` for press-and-hold mode
-switching — both use the Framework's `_register_timer_callback` mechanism.
+| Encoder Row | CC Numbers | Count | Current Component Owner |
+|---|---|---|---|
+| "Device encoders" (row below display) | CC 16–23, channel 0 | 8 | `ShiftableDeviceComponent` |
+| "Top encoders" (global track control row) | CC 48–55, channel 0 | 8 | `EncModeSelectorComponent` |
 
----
+The four global mode buttons (notes 87–90: Pan / Send A / Send B / Send C) currently route the top encoder row exclusively via `EncModeSelectorComponent`. In Pan mode the top encoders map to per-track pan; in Send A/B/C mode they map to per-track send levels. The device encoder row is entirely independent — always under `ShiftableDeviceComponent`, responding to shift+bank-button navigation.
 
-## Component Boundaries
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `ToggleMomentaryChannelStripComponent` | Press-duration detection, solo/mute state inversion logic, LED feedback | `self._track.solo`, `self._track.mute`, parent `ChannelStripComponent` LED update chain |
-| `SpecialMixerComponent` | Factory for per-track strips — override `_create_strip()` to return new class | `ToggleMomentaryChannelStripComponent` (8 instances) |
-| `APC_64_40_9._setup_mixer_control()` | Wires `ButtonElement` instances to strips via `set_solo_button()` / `set_mute_button()` | `SpecialMixerComponent` — no change needed here |
-| `ChannelStripComponent` (Framework base) | Owns `_solo_value()` and `_mute_value()` listener signatures; exposes `self._track` | Overridden by `ToggleMomentaryChannelStripComponent` |
-
-No new top-level component file is required for the composition layer. The change
-is self-contained inside the channel strip and mixer factory.
+The `ToggleMomentaryChannelStripComponent` (v1.0) provides the proven timer pattern: `_register_timer_callback`, tick-countdown state per button, and revert-on-release for boolean track attributes (`solo`, `mute`).
 
 ---
 
-## Timing Mechanism
+## Feature 1: 16-Parameter Encoder Mapping in Pan Mode
 
-### Framework Timer Facts
+### The Core Constraint
 
-`_register_timer_callback(self._on_timer)` fires the callback at the Framework's
-`TIMER_DELAY` rate, which is **100ms per tick** (confirmed in
-`_Framework/Defaults.py`: `TIMER_DELAY = 0.1`).
+The Framework's `DeviceComponent._assign_parameters()` connects one 8-element `_parameter_controls` tuple to one "bank" of 8 parameters at a time. Banks are fixed 8-parameter slices of `DEVICE_DICT` entries, or auto-grouped in chunks of 8 for unmapped devices. There is no native "16 controls to one bank" mechanism.
 
-A 400ms threshold therefore equals **4 ticks**.
+**Consequence:** To display params 1–8 on the top encoders AND params 9–16 on the device encoders simultaneously, two independent `DeviceComponent` instances must each point at the same device with different `_bank_index` values (0 and 1 respectively).
 
-`_register_timer_callback` / `_unregister_timer_callback` is the standard in-codebase
-mechanism. It is used in:
-- `SpecialChanStripComponent` — fold delay (5 ticks = 500ms)
-- `EncModeSelectorComponent` — Pan/Vol press-hold (5 ticks = 500ms)
-- `DetailViewCntrlComponent` — show-playing-clip delay (5 ticks = 500ms)
-- `StepSequencerComponent` — scroll repeat (4 tick initial, 1 tick interval)
-- `CustomTransportComponent` — FF/Rewind repeat
+### Recommended Design
 
-The constant `TRACK_FOLD_DELAY = 5` in `SpecialChanStripComponent` is the direct
-precedent. For this feature, define `LONG_PRESS_DELAY = 4` (400ms).
+**Use two `DeviceComponent` instances targeting the same selected device, at bank 0 and bank 1.**
 
-### Why Timer Ticks and Not `schedule_message`
+The `ShiftableDeviceComponent` already handles the device encoder row at `bank_index` driven by shift+bank-button. The top encoder row needs a parallel device component that:
 
-`schedule_message(N, callback)` fires once after N ticks — appropriate for deferred
-one-shot actions. For press-hold detection we need to measure elapsed ticks while
-a button remains held: timer callback is correct. `schedule_message` cannot be
-cancelled on release; the tick countdown approach can.
+1. Tracks the same appointed/selected device as `ShiftableDeviceComponent`
+2. Is locked to `bank_index = 0` (params 1–8)
+3. Is active only when Pan mode is selected
 
----
+The device encoder row continues using `ShiftableDeviceComponent` but in Pan mode it should present `bank_index = 1` (params 9–16) rather than bank 0.
 
-## Data Flow
+### Integration Point: `EncModeSelectorComponent.update()`
 
-### Short Press (toggle)
-
-```
-Hardware MIDI note-on  →  ButtonElement.receive_value(127)
-  →  ChannelStripComponent._solo_value(127)          [inherited; records press-down]
-  →  _press_ticks_remaining = LONG_PRESS_DELAY        [new state]
-
-Hardware MIDI note-off →  ButtonElement.receive_value(0)
-  →  OverriddenClass._solo_value(0)
-     IF _press_ticks_remaining > 0:                   [still counting → short press]
-       self._track.solo = not self._track.solo         [toggle]
-       _press_ticks_remaining = -1                     [disarm]
-```
-
-### Long Press (momentary)
-
-```
-Hardware MIDI note-on  →  _solo_value(127)
-  →  _press_ticks_remaining = LONG_PRESS_DELAY
-  →  record _state_before_press = self._track.solo
-
-_on_timer (tick 1..3):  _press_ticks_remaining > 0, decrement
-
-_on_timer (tick 4):     _press_ticks_remaining == 0
-  →  _momentary_active = True
-  →  self._track.solo = not _state_before_press       [activate momentary inversion]
-  →  LED update fires automatically via Live listener
-
-Hardware MIDI note-off →  _solo_value(0)
-  IF _momentary_active:
-    self._track.solo = _state_before_press             [revert]
-    _momentary_active = False
-```
-
-### LED State
-
-`ChannelStripComponent` already listens to `self._track.solo_has_listener` and
-calls `update()` on change — Live fires the listener when `self._track.solo` is
-written. No additional LED code is needed beyond what the base class already does,
-provided the override calls `ChannelStripComponent.update(self)` appropriately.
-
----
-
-## Where Timing Logic Lives
-
-**Component level — inside `ToggleMomentaryChannelStripComponent`.**
-
-Rationale:
-- Each track needs independent timing state (`_press_ticks_remaining`, `_momentary_active`,
-  `_state_before_press`) because two tracks can be held simultaneously.
-- `ChannelStripComponent` already holds `self._track`, which is the only API needed
-  to read and write `.solo` / `.mute`.
-- The Framework timer fires per-component (each instance registers its own callback).
-- This avoids touching `SpecialMixerComponent`, `ShiftableSelectorComponent`, or the
-  composition layer beyond the `_create_strip()` factory one-liner.
-
-**Do not put timing logic in:**
-- `SpecialMixerComponent` — it would require distributing per-track state across 8 index
-  slots and polling them from a single timer; fragile and harder to test.
-- `APC_64_40_9.py` (composition layer) — script setup; should only wire, not behave.
-- `ConfigurableButtonElement` — element layer is stateless input abstraction; adding
-  duration state there leaks domain logic into the UI element and breaks the element's
-  reuse contract.
-- A new top-level `*SelectorComponent` — unnecessary indirection; selectors coordinate
-  multiple components, not individual button presses.
-
----
-
-## Integration Points
-
-### 1. `SpecialMixerComponent._create_strip()` — one-line change
+Currently, when `_mode_index == 0` (Pan mode), `EncModeSelectorComponent.update()` calls:
 
 ```python
-# Before
-def _create_strip(self):
-    return SpecialChanStripComponent()
-
-# After
-def _create_strip(self):
-    return ToggleMomentaryChannelStripComponent()
+self._mixer.channel_strip(index).set_pan_control(self._controls[index])
+self._mixer.channel_strip(index).set_send_controls((None, None, None))
 ```
 
-Add the import at the top of `SpecialMixerComponent.py`. No other change needed.
+This must change: instead of routing top encoders to mixer pan, route them to a new `DeviceComponent` instance at bank 0. The mixer pan assignment should be cleared, and the device component at bank 0 should receive the top encoder controls.
 
-### 2. `ToggleMomentaryChannelStripComponent` extends `SpecialChanStripComponent`
+This means `EncModeSelectorComponent` needs a reference to the new bank-0 device component (passed in constructor or via setter) so it can activate/deactivate parameter connections in `update()`.
 
-The new class:
-- Calls `_register_timer_callback(self._on_timer)` in `__init__`
-- Calls `_unregister_timer_callback(self._on_timer)` in `disconnect` (already called
-  by parent's `disconnect` for its own timer, but the new class needs its own)
-- Overrides `_solo_value(value)` and `_mute_value(value)` to intercept before
-  delegating or replacing the base behaviour
-- Adds `_on_timer()` that decrements tick counters per button
+### New Component: `Pan16DeviceComponent`
 
-Note: `SpecialChanStripComponent` already registers a timer callback in `__init__` and
-unregisters in `disconnect`. The `_on_timer` from that class handles fold delay.
-The new `_on_timer` must incorporate or call the parent `_on_timer` logic, or the
-new class must maintain its own separate callback. The safest approach: call
-`SpecialChanStripComponent._on_timer(self)` from the new `_on_timer` to preserve
-fold-delay behaviour, then add the press-duration logic.
+Create a new file `Pan16DeviceComponent.py`. This component:
 
-### 3. Solo/Mute button assignment in `APC_64_40_9._setup_mixer_control()` — no change
+- Extends `DeviceComponent` (not `ShiftableDeviceComponent` — no bank navigation buttons needed)
+- Receives appointed device changes via `song().add_appointed_device_listener`
+- Holds `bank_index = 0` permanently
+- Exposes `set_parameter_controls(controls)` to receive the top 8 encoders
+- Is enabled/disabled by `EncModeSelectorComponent` based on mode
 
-Solo and mute buttons are created as `ButtonElement(is_momentary, ...)` and passed to
-`strip.set_solo_button()` / `strip.set_mute_button()`. The `is_momentary=True` flag
-ensures the Framework fires both note-on (value=127) and note-off (value=0) events —
-which is required for press-duration detection. This is already correct.
+The appointed device listener pattern already exists in `EncoderDeviceComponent` (line 50: `self.song().add_appointed_device_listener(self._on_device_changed)`) — copy this directly.
 
-### 4. `ShiftableSelectorComponent` — no change
+### `ShiftableDeviceComponent` Modification for Pan Mode
 
-In shift mode, `ShiftableSelectorComponent.update()` calls
-`self._mixer.channel_strip(index).set_solo_button(None)` to disconnect buttons.
-The new component inherits `set_solo_button` from `ChannelStripComponent`, so
-disconnect/reconnect of the button works identically. Press-ticks state should be
-reset when `set_solo_button(None)` is called — the override must handle this.
-The reset ensures a button disconnected mid-hold does not fire a phantom toggle on
-reconnect.
+When Pan mode is active, the device encoder row (CC 16–23) should display device params 9–16. Currently `ShiftableDeviceComponent` starts at bank 0 and navigates with shift+bank-buttons. The simplest approach:
 
-### 5. `StepSequencerComponent` — no change
+- In Pan mode, `ShiftableDeviceComponent` is set to `bank_index = 1` via a new `set_pan_mode(active)` method, which calls `set_mode(1)` on the internal `_control_translation_selector` and updates the display.
+- When Pan mode exits, the `_bank_index` reverts to its last user-selected value.
 
-The sequencer uses `mute_buttons` and `solo_buttons` tuples for its own lane-mute
-and loop-length functions. These are the same `ButtonElement` objects, but the
-sequencer calls `set_mute_button(None)` on the channel strips while active — so
-the timer logic is naturally disabled during sequencer mode.
+**Alternative (simpler):** Do not modify `ShiftableDeviceComponent`. Instead, disconnect its parameter controls in Pan mode and route the device encoder row through a second `Pan16DeviceComponent` instance (bank 1). Reconnect `ShiftableDeviceComponent` when Pan mode exits.
+
+The "disconnect/reconnect" alternative is lower risk because it avoids modifying the tested `ShiftableDeviceComponent` and reuses the same appointed-device tracking code in a second component instance.
+
+### Wiring Change in `APC_64_40_9._setup_global_control()`
+
+```python
+# New additions (alongside existing components):
+self._pan16_device_top = Pan16DeviceComponent(bank_index=0)    # top encoders → params 1-8
+self._pan16_device_enc = Pan16DeviceComponent(bank_index=1)    # device encoders → params 9-16
+```
+
+`EncModeSelectorComponent` needs the references so `update()` can wire/unwire them:
+
+```python
+self._encoder_modes = EncModeSelectorComponent(
+    self._mixer,
+    pan16_top=self._pan16_device_top,
+    pan16_enc=self._pan16_device_enc,
+    device_component=self._device,
+    global_param_controls=tuple(self._global_param_controls),
+    device_param_controls=tuple(device_param_controls)   # need to pass down
+)
+```
+
+Or expose them via setters to keep the constructor unchanged.
 
 ---
 
-## Patterns to Follow
+## Feature 2: Toggle/Momentary for Send A/B/C Buttons
 
-### Pattern: Tick-Countdown Press-Hold Detection
+### Hardware Clarification
 
-Established in `SpecialChanStripComponent` (fold delay) and `EncModeSelectorComponent`
-(Pan/Vol mode switch). Structure:
+The APC40 has **no per-track Send A/B/C hardware buttons**. The physical buttons at notes 88, 89, 90 are the global encoder mode selectors. "Send A/B/C per-track buttons get toggle/momentary" in the milestone context means: the **mode selector buttons** (Send A, Send B, Send C) get toggle/momentary behavior — short press selects that send mode permanently; long press activates that send mode only while held, reverting to the previous mode on release.
+
+This is directly analogous to the `EncModeSelectorComponent._on_timer` press-hold mechanism already in the codebase (the Pan/Vol mode toggle uses 5 ticks). The v1.1 version extends this to Send A/B/C with the same 4-tick (~400ms) threshold from v1.0.
+
+### Integration Point: `EncModeSelectorComponent`
+
+The existing `_pan_to_vol_ticks_delay` field and `_on_timer` in `EncModeSelectorComponent` already handle press-hold for the Pan button (to switch between Pan mode and Volume mode). The Send A/B/C buttons need the same treatment.
+
+**Modify `EncModeSelectorComponent._mode_value()`** to arm the ticks countdown for buttons at index 1, 2, 3 (Send A/B/C), not just index 0 (Pan). On threshold expiry, the mode activates momentarily. On release before threshold, it toggles (stays in the new mode).
+
+The exact inversion logic to implement:
+- **Short press:** Set mode index to the pressed button's index. Mode persists after release. (Current behavior — no change needed.)
+- **Long press:** Set mode index to the pressed button's index at press-down (immediate activation, zero latency). After threshold, mark as momentary. On release, revert `_mode_index` to the mode that was active before the press.
+
+This mirrors the v1.0 `_handle_toggle_momentary` pattern precisely, transposed to mode indices instead of boolean track attributes.
+
+### State Variables Needed in `EncModeSelectorComponent`
 
 ```python
-LONG_PRESS_DELAY = 4  # 4 ticks x 100ms = 400ms
-
-class ToggleMomentaryChannelStripComponent(SpecialChanStripComponent):
-
-    def __init__(self):
-        SpecialChanStripComponent.__init__(self)
-        # Solo press state
-        self._solo_ticks_delay = -1
-        self._solo_state_before_press = False
-        self._solo_momentary_active = False
-        # Mute press state (mirror for mute)
-        self._mute_ticks_delay = -1
-        self._mute_state_before_press = False
-        self._mute_momentary_active = False
-        # Note: SpecialChanStripComponent already registers its own timer
-        # callback for fold delay. The parent __init__ handles that.
-        # This class's _on_timer calls the parent's, then handles its own logic.
-
-    def disconnect(self):
-        SpecialChanStripComponent.disconnect(self)
-        # State cleanup on disconnect
-        self._solo_ticks_delay = -1
-        self._mute_ticks_delay = -1
-
-    def set_solo_button(self, button):
-        # Reset timing state when button is reassigned (e.g., shift mode)
-        self._solo_ticks_delay = -1
-        self._solo_momentary_active = False
-        ChannelStripComponent.set_solo_button(self, button)
-
-    def set_mute_button(self, button):
-        self._mute_ticks_delay = -1
-        self._mute_momentary_active = False
-        ChannelStripComponent.set_mute_button(self, button)
-
-    def _solo_value(self, value):
-        if self.is_enabled() and self._track is not None:
-            if value != 0:  # press-down
-                self._solo_state_before_press = self._track.solo
-                self._solo_ticks_delay = LONG_PRESS_DELAY
-            else:           # release
-                if self._solo_momentary_active:
-                    self._track.solo = self._solo_state_before_press
-                    self._solo_momentary_active = False
-                elif self._solo_ticks_delay >= 0:
-                    self._track.solo = not self._track.solo
-                self._solo_ticks_delay = -1
-        # Do NOT call ChannelStripComponent._solo_value — we replace it entirely
-
-    def _on_timer(self):
-        SpecialChanStripComponent._on_timer(self)  # preserve fold-delay behaviour
-        if self.is_enabled() and self._track is not None:
-            # Solo countdown
-            if self._solo_ticks_delay > -1:
-                if self._solo_ticks_delay == 0:
-                    self._solo_momentary_active = True
-                    self._track.solo = not self._solo_state_before_press
-                self._solo_ticks_delay -= 1
-            # Mute countdown (same pattern)
-            if self._mute_ticks_delay > -1:
-                if self._mute_ticks_delay == 0:
-                    self._mute_momentary_active = True
-                    self._track.mute = not self._mute_state_before_press
-                self._mute_ticks_delay -= 1
+self._send_ticks_delay = [-1, -1, -1, -1]    # one per mode button (index 0-3)
+self._send_mode_before_press = 0              # mode index active before press
+self._send_momentary_active = False           # True if long-press threshold crossed
+self._send_pressed_mode = -1                  # which mode is currently held
 ```
 
-This is illustrative, not final production code — the pattern mirrors existing
-components exactly.
+The per-button tick array avoids allocating separate fields per button, consistent with the existing code style in the sequencer (`_on_timer` approach).
+
+### No New File Needed
+
+This is a modification to the existing `EncModeSelectorComponent.py`, not a new component. The timer callback is already registered in `__init__` and unregistered in `disconnect`. The `_on_timer` method already exists.
+
+---
+
+## Component Boundary Map (Post-v1.1)
+
+| Component | Responsibility | New/Modified |
+|---|---|---|
+| `Pan16DeviceComponent` | Track appointed device; map 8 encoders to one bank (index 0 or 1) of device params | **NEW FILE** |
+| `EncModeSelectorComponent` | Mode switching for top encoder row. Pan mode: activate `Pan16DeviceComponent`. Send A/B/C: activate send routing. Long-press momentary for all mode buttons | **MODIFIED** |
+| `ShiftableDeviceComponent` | Device encoder row navigation with shift+bank-buttons. In Pan mode: disconnected from encoders (or held at bank 1) | **MODIFIED (minimally)** or disconnect/reconnect from composition |
+| `ToggleMomentaryChannelStripComponent` | Solo/Mute toggle/momentary per track (v1.0, unchanged) | No change |
+| `SpecialMixerComponent` | Factory for channel strips (v1.0, unchanged) | No change |
+| `APC_64_40_9._setup_global_control()` | Wire new `Pan16DeviceComponent` instances, pass references to `EncModeSelectorComponent` | **MODIFIED** |
+| `APC_64_40_9._setup_device_and_transport_control()` | Device encoder row setup; may need to expose `device_param_controls` tuple for `EncModeSelectorComponent` | **MODIFIED (minimally)** |
+
+---
+
+## Data Flow: Pan Mode (16 Parameters)
+
+```
+Pan button pressed (note 87)
+  → EncModeSelectorComponent._mode_value(value=127)
+  → EncModeSelectorComponent.update() [mode_index == 0]
+    → mixer.channel_strip(i).set_pan_control(None)          # release mixer pan
+    → mixer.channel_strip(i).set_send_controls((None,None,None))
+    → pan16_device_top.set_parameter_controls(top_encoders)  # NEW: bank 0, params 1-8
+    → pan16_device_enc.set_parameter_controls(device_encoders) # NEW: bank 1, params 9-16
+    → device_component.set_parameter_controls(None)          # disconnect ShiftableDevice
+
+Pan mode active:
+  top encoders (CC 48-55) → Pan16DeviceComponent(bank=0) → device.params[0:8]
+  device encoders (CC 16-23) → Pan16DeviceComponent(bank=1) → device.params[8:16]
+
+Send A button pressed (note 88):
+  → EncModeSelectorComponent.update() [mode_index == 1]
+    → pan16_device_top.set_parameter_controls(None)          # release device params
+    → pan16_device_enc.set_parameter_controls(None)          # release device params
+    → device_component.set_parameter_controls(device_encoders) # reconnect ShiftableDevice
+    → mixer.channel_strip(i).set_send_controls((top_encoders[i], None, None))  # send A
+```
+
+---
+
+## Data Flow: Toggle/Momentary Send A/B/C Buttons
+
+```
+Send A button press-down (value=127):
+  → EncModeSelectorComponent._mode_value(127, sender=send_a_button)
+  → _send_mode_before_press = self._mode_index   # record current mode
+  → set_mode(1)                                  # activate Send A immediately
+  → _send_ticks_delay[1] = LONG_PRESS_DELAY      # arm countdown
+
+EncModeSelectorComponent._on_timer (ticks 1..3):
+  → _send_ticks_delay[1] > 0, decrement
+
+EncModeSelectorComponent._on_timer (tick 4, threshold crossed):
+  → _send_momentary_active = True
+  → _send_pressed_mode = 1
+
+Send A button release (value=0):
+  → EncModeSelectorComponent._mode_value(0, sender=send_a_button)
+  → IF _send_momentary_active and _send_pressed_mode == 1:
+      set_mode(_send_mode_before_press)          # revert to previous mode
+      _send_momentary_active = False
+  → _send_ticks_delay[1] = -1
+
+Short press (release before tick 4):
+  → _send_ticks_delay[1] = -1, _send_momentary_active stays False
+  → Send A mode stays active (already set at press-down)
+```
+
+---
+
+## Integration Points Summary
+
+### 1. New file: `Pan16DeviceComponent.py`
+
+Extends `DeviceComponent`. Constructor takes `bank_index` (0 or 1). Adds appointed device listener (same pattern as `EncoderDeviceComponent` lines 50, 84–89). Exposes `set_parameter_controls()`. No bank navigation buttons. Approximately 40–60 lines.
+
+### 2. `EncModeSelectorComponent.py` — two changes
+
+**Change A (Pan mode routing):** `update()` must route to `Pan16DeviceComponent` instances when `_mode_index == 0`, and disconnect them in all other modes. Requires constructor or setter to receive `pan16_top`, `pan16_enc`, `device_component` references.
+
+**Change B (toggle/momentary mode buttons):** `_mode_value()` and `_on_timer()` extended with the tick-countdown pattern for all 4 mode buttons. The existing `_pan_to_vol_ticks_delay` field may be unified into a single mechanism or left as-is with the new fields added alongside it.
+
+### 3. `APC_64_40_9._setup_global_control()` — constructor/setter calls
+
+Instantiate `Pan16DeviceComponent` for bank 0 and bank 1. Pass them to `EncModeSelectorComponent`. The device encoder controls (`device_param_controls` list) are created in `_setup_device_and_transport_control()` — they need to be accessible in `_setup_global_control()`. Store them as `self._device_param_controls` on the instance (currently they are local to the method).
+
+### 4. `APC_64_40_9._setup_device_and_transport_control()` — promote local variable
+
+Change `device_param_controls` from a local list to `self._device_param_controls` so `_setup_global_control()` can reference it.
+
+### 5. No change to `ToggleMomentaryChannelStripComponent.py`
+
+The v1.0 component is unaffected by both v1.1 features.
+
+### 6. No change to `SpecialMixerComponent.py`, `ShiftableSelectorComponent.py`, `APC.py`
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Putting Timer in ButtonElement
+### Anti-Pattern 1: Trying to pass 16 controls to one DeviceComponent
 
-**What:** Subclassing `ConfigurableButtonElement` or `ButtonElement` to track press duration.
+**What:** Create a 16-element tuple and call `ShiftableDeviceComponent.set_parameter_controls(16_controls)`.
 
-**Why bad:** Element layer is a thin hardware abstraction. Duration is domain behaviour —
-the same button (solo note 49, channel 0) already serves three different roles
-(solo in normal mode, loop-length in sequencer mode, reassignment in shift mode). A
-duration-aware element would fire toggle actions even when the button is being used
-for sequencer functions.
+**Why bad:** `EncModeSelectorComponent.set_controls()` asserts `len(controls) == 8`. `ShiftableDeviceComponent._assign_parameters()` zips controls against an 8-parameter bank — it only assigns the first 8 even if 16 are passed. The second 8 controls never get assigned.
 
-**Instead:** Override the `_solo_value` / `_mute_value` listener in the component, where
-the enabled/track context is available.
+**Instead:** Two DeviceComponent instances, one per 8-encoder row.
 
-### Anti-Pattern 2: Single Timer in SpecialMixerComponent Managing All 8 Tracks
+### Anti-Pattern 2: Using bank navigation buttons to cycle to bank 1
 
-**What:** One `_on_timer` in `SpecialMixerComponent` with a list of 8 tick counters.
+**What:** Have the user press shift+bank-button to get to params 9–16 on the device encoder row while Pan mode is active.
 
-**Why bad:** Requires the mixer to know about press-duration logic, which is track-level
-state. Adds coupling between the mixer container and the timing domain. Harder to reason
-about when tracks are re-ordered or when only some strips are active.
+**Why bad:** This requires the user to manually navigate to bank 1 every time they enter Pan mode. The milestone requirement says "Pan mode maps device encoders to device parameters 9-16" — this implies automatic, not user-driven bank selection.
 
-**Instead:** Each `ChannelStripComponent` instance owns its own timer registration and
-per-button state, which is how the Framework is designed.
+**Instead:** `Pan16DeviceComponent` locks `bank_index` in `__init__`. No user interaction required.
 
-### Anti-Pattern 3: Using `schedule_message` for Duration Detection
+### Anti-Pattern 3: Toggling send encoder mapping to implement "toggle/momentary sends"
 
-**What:** On press, call `schedule_message(4, self._on_long_press)` then cancel it
-on release.
+**What:** On Send A button long-press, activate send encoder control; on release, remove it. Treating send level encoders as togglable.
 
-**Why bad:** `schedule_message` has no cancellation API in the Framework. The callback
-will fire even after button release. This leads to phantom momentary activations on
-short presses.
+**Why bad:** The APC40 hardware has no per-track send button. Sends are continuous parameters (volume levels) — there is no boolean send state to toggle. This interpretation is not actionable.
 
-**Instead:** Use the tick-countdown pattern with the timer callback; release sets
-`_ticks_delay = -1` which stops the countdown before threshold is reached.
+**Instead:** The toggle/momentary behavior applies to the **mode selector button itself** (Send A button = note 88 = global encoder mode): short press permanently enters Send A encoder mode; long press enters it momentarily and reverts on release.
 
-### Anti-Pattern 4: Calling `ChannelStripComponent._solo_value` and Then Adding Logic
+### Anti-Pattern 4: Modifying `ShiftableDeviceComponent` bank navigation for Pan mode
 
-**What:** Call `super()._solo_value(value)` first, then add duration logic on top.
+**What:** Add a `set_pan_mode()` method to `ShiftableDeviceComponent` that forces `_bank_index = 1` when Pan mode is active.
 
-**Why bad:** The base `_solo_value` toggles `self._track.solo` immediately on press-down
-(when `value != 0`). Calling it would fire the toggle instantly, then the timer logic
-would revert it — double-fire behaviour and inconsistent LED state.
+**Why bad:** `ShiftableDeviceComponent` is shift-button-controlled. Adding Pan mode awareness to it creates cross-concern coupling — the device component would need to know about encoder mode state, violating the single-responsibility boundary.
 
-**Instead:** Replace `_solo_value` entirely in the override. Re-implement only the
-`is_enabled()` / `self._track is not None` guards from the base.
-
----
-
-## Scalability Considerations
-
-| Concern | Current (8 tracks) | Future (if extended) |
-|---------|--------------------|----------------------|
-| Timer registrations | 8 per-strip registrations; Framework handles the list | Scales linearly; no change needed |
-| Arm buttons (Track Activator) | Out of scope; same pattern would apply if added later | Third `_arm_ticks_delay` per strip |
-| Configurable threshold | Fixed at 4 ticks (400ms); constant lives in new file | Move `LONG_PRESS_DELAY` to `Matrix_Maps.py` or a `Config.py` |
-| Shift-mode safety | `set_solo_button(None)` resets state; covered by integration point 4 | No extra work needed |
+**Instead:** Disconnect `ShiftableDeviceComponent` from the device encoder controls during Pan mode (call `set_parameter_controls(None)`) and let `Pan16DeviceComponent(bank=1)` own those controls instead.
 
 ---
 
 ## Suggested Build Order
 
-This sequence minimises risk and makes each step independently verifiable by loading
-the script in Ableton Live.
+This sequence keeps each step independently loadable and verifiable in Ableton Live.
 
-**Step 1 — New component file, no behaviour change yet**
+**Step 1 — Promote device encoder controls to instance variable**
 
-Create `ToggleMomentaryChannelStripComponent.py` that extends `SpecialChanStripComponent`
-with no overrides — just the class definition and a passthrough `__init__`. Change
-`SpecialMixerComponent._create_strip()` to return it. Verify: script loads, all
-existing buttons work identically.
+In `_setup_device_and_transport_control()`, change `device_param_controls = []` to `self._device_param_controls = []` and update all references. No behavior change. Verify: script loads, all device controls work.
 
-**Step 2 — Timer scaffolding**
+**Step 2 — Create `Pan16DeviceComponent.py` (no wiring yet)**
 
-Add `_on_timer` registration to the new class. Add the tick-counter state variables.
-Have `_on_timer` log a message each call (then remove logging). Verify: script loads,
-no errors, no behaviour change.
+New file, two instances (bank 0, bank 1). No wiring to encoders yet — just verify script loads without error.
 
-**Step 3 — Solo toggle/momentary**
+**Step 3 — Wire Pan mode to `Pan16DeviceComponent`**
 
-Override `_solo_value` for solo buttons only. Implement countdown → momentary path for
-solo. Verify: solo short-press toggles; solo long-press activates while held and reverts
-on release; LED tracks state correctly; shift mode still disconnects solo properly.
+Modify `EncModeSelectorComponent.update()` mode 0 branch: release mixer pan, activate `Pan16DeviceComponent` for top and device encoder rows, disable `ShiftableDeviceComponent` parameter controls. All other modes: do the reverse. Verify: Pan button routes both encoder rows to device params 1–16; Send A/B/C routes top encoders to sends as before; device encoder row under ShiftableDevice in Send modes.
 
-**Step 4 — Mute toggle/momentary**
+**Step 4 — Add toggle/momentary to Send A/B/C mode buttons**
 
-Mirror the same logic for `_mute_value` and mute tick state. Verify: all four
-behaviours (short/long x solo/mute) work; both buttons can be held simultaneously
-on different tracks.
+Add tick-countdown state to `EncModeSelectorComponent`. Extend `_mode_value()` and `_on_timer()`. Verify: short press on Send A/B/C permanently selects mode; long press activates mode then reverts on release; Pan mode unchanged.
 
 **Step 5 — Edge cases**
 
-Test: long-press on already-soloed track (should temporarily un-solo); rapid presses
-do not accumulate state; shift held during a solo long-press does not leave track in
-wrong state; sequencer mode transitions do not leave stuck-high solo.
+Test: rapid mode switching does not leave stuck encoder assignments; mid-hold mode transition reverts correctly; appointed device changes during Pan mode update both `Pan16DeviceComponent` instances; shift held during mode press does not cause stuck mode state.
 
 ---
 
 ## Files to Create or Modify
 
 | Action | File | Change |
-|--------|------|--------|
-| Create | `ToggleMomentaryChannelStripComponent.py` | New component, ~70-90 lines |
-| Modify | `SpecialMixerComponent.py` | Import + `_create_strip()` one-liner |
-| No change | `APC_64_40_9.py` | Wiring unchanged |
-| No change | `ConfigurableButtonElement.py` | Element layer untouched |
-| No change | `ShiftableSelectorComponent.py` | Button disconnect/reconnect already correct |
-| Optional | `Matrix_Maps.py` | Add `LONG_PRESS_DELAY = 4` constant (or put in new file) |
+|---|---|---|
+| Create | `Pan16DeviceComponent.py` | New component, ~50 lines |
+| Modify | `EncModeSelectorComponent.py` | Pan mode routing + toggle/momentary for all mode buttons |
+| Modify | `APC_64_40_9.py` | Promote `device_param_controls` to instance var; instantiate and wire `Pan16DeviceComponent`; extend `EncModeSelectorComponent` constructor/setter calls |
+| No change | `ToggleMomentaryChannelStripComponent.py` | v1.0 component unaffected |
+| No change | `SpecialMixerComponent.py` | Unchanged |
+| No change | `ShiftableDeviceComponent.py` | Unchanged (disconnected from encoders during Pan mode by EncModeSelectorComponent) |
+| No change | `ShiftableSelectorComponent.py` | Unchanged |
+
+---
+
+## Open Questions / Risks
+
+| Question | Impact | Confidence |
+|---|---|---|
+| Does Framework allow two DeviceComponent instances on the same device simultaneously without conflict? | HIGH — core assumption of the 16-param design | MEDIUM — no official doc; `EncoderDeviceComponent` uses `_alt_device = DeviceComponent()` which suggests it is possible; verify in Step 2 |
+| Is `EncModeSelectorComponent._on_timer` already unregistered when mode selector is disabled (non-normal mode)? | MEDIUM — timer must not fire in shift mode | HIGH — `_on_timer` already guards with `if self.is_enabled()` |
+| Do `Pan16DeviceComponent` instances need to handle the `device_selection_follows_track_selection` flag from `APC_64_40_9`? | MEDIUM — if not tracked, params won't update on track change | MEDIUM — use `appointed_device_listener` which fires on track-follows-device changes; verify behavior |
+| What happens with devices that have fewer than 16 parameters? | LOW — extra controls silently release; `_assign_parameters` already handles `_parameter_controls[len(bank):]` with release | HIGH — confirmed in Framework source analysis |
 
 ---
 
 ## Sources
 
-- Direct source analysis: `/Users/stoersignal/Dev/APC_64_40_12/SpecialChanStripComponent.py` — tick-countdown pattern (HIGH confidence)
-- Direct source analysis: `/Users/stoersignal/Dev/APC_64_40_12/EncModeSelectorComponent.py` — press-hold mode selection (HIGH confidence)
-- Direct source analysis: `/Users/stoersignal/Dev/APC_64_40_12/CustomTransportComponent.py` — register/unregister timer on press/release (HIGH confidence)
-- Direct source analysis: `/Users/stoersignal/Dev/APC_64_40_12/ShiftableSelectorComponent.py` — button reconnection pattern in shift mode (HIGH confidence)
-- Direct source analysis: `/Users/stoersignal/Dev/APC_64_40_12/APC_64_40_9.py` lines 134-195 — solo/mute button creation and wiring (HIGH confidence)
-- [Ableton Live 11 MIDIRemoteScripts — _Framework/Defaults.py](https://github.com/gluon/AbletonLive11_MIDIRemoteScripts) — `TIMER_DELAY = 0.1` (100ms per tick) (MEDIUM confidence — Live 11 source; Live 12 rate assumed unchanged)
-- [_Framework ChannelStripComponent](https://github.com/gluon/AbletonLive11_MIDIRemoteScripts/blob/master/_Framework/ChannelStripComponent.py) — `self._track.solo`, `self._track.mute` read/write pattern (MEDIUM confidence — Live 11 source; API stable)
+- Direct source analysis: `EncModeSelectorComponent.py` — mode switching, timer pattern (HIGH confidence)
+- Direct source analysis: `ShiftableDeviceComponent.py` — bank_index, parameter_controls wiring (HIGH confidence)
+- Direct source analysis: `EncoderDeviceComponent.py` — appointed device listener pattern, dual DeviceComponent usage (HIGH confidence)
+- Direct source analysis: `APC_64_40_9.py` — composition layer, encoder row MIDI assignments (HIGH confidence)
+- Direct source analysis: `ToggleMomentaryChannelStripComponent.py` — v1.0 timer pattern to replicate (HIGH confidence)
+- [Ableton Live 11 MIDIRemoteScripts — DeviceComponent.py](https://github.com/gluon/AbletonLive11_MIDIRemoteScripts/blob/master/_Framework/DeviceComponent.py) — `_assign_parameters`, bank structure, 8-param-per-bank constraint (MEDIUM confidence — Live 11 source; API stable across Live 12)
+- [Ableton Live 11 MIDIRemoteScripts — _Generic/Devices.py](https://github.com/gluon/AbletonLive11_MIDIRemoteScripts/blob/master/_Generic/Devices.py) — `number_of_parameter_banks`, 8-parameter bank structure confirmed (MEDIUM confidence)
 
 ---
 

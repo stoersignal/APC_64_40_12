@@ -1,208 +1,304 @@
-# Technology Stack: Press-Duration Detection
+# Technology Stack: 16Macros Milestone
 
 **Project:** APC40 Toggle/Momentary Button Behavior
-**Milestone:** Add dual-behavior (short press / long press) to Solo and Mute buttons
+**Milestone:** v1.1 16Macros — 16-parameter encoder mapping in Pan mode + Send A/B/C toggle/momentary
 **Researched:** 2026-03-31
-**Overall confidence:** HIGH — all claims verified against decompiled _Framework source at `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/`
+**Overall confidence:** HIGH — all claims verified against decompiled _Framework source at
+`/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/` (source timestamp 2025-03-17)
 
 ---
 
-## Timer Mechanism
+## What Is Already Settled (Do Not Re-Research)
 
-### How the tick system works
-
-Ableton Live's C++ host drives the `_Framework` task system. The root `TaskGroup` is updated by Live at a fixed rate defined in `_Framework/Defaults.py`:
-
-```python
-TIMER_DELAY = 0.1        # seconds per tick — 100ms
-MOMENTARY_DELAY = 0.3    # seconds — 300ms (3 ticks)
-MOMENTARY_DELAY_TICKS = int(MOMENTARY_DELAY / TIMER_DELAY)  # = 3
-```
-
-**Confidence: HIGH** — verified in `_Framework/Defaults.py` (source timestamp 2025-03-17).
-
-Each "tick" is approximately 100ms. This is not user-configurable and not dependent on audio buffer size or tempo.
-
-### What "~400ms threshold" means in ticks
-
-400ms / 100ms per tick = **4 ticks**. Use a constant:
-
-```python
-LONG_PRESS_DELAY = 4  # ticks at 100ms each = ~400ms
-```
+The v1.0 timer infrastructure, shift guards, `_register_timer_callback`, tick rate, and
+`LONG_PRESS_DELAY = 4` are proven and unchanged. The new milestone reuses them verbatim.
 
 ---
 
-## The Two Viable Approaches
+## Feature 1: 16-Parameter Encoder Mapping in Pan Mode
 
-### Approach 1: `_register_timer_callback` with tick counter (RECOMMENDED)
+### What the hardware provides
 
-This is the **same pattern already used in `SpecialChanStripComponent`** — the `_toggle_fold_ticks_delay` mechanism. It is proven in-project, does not require any new imports, and is compatible with the existing class hierarchy.
+Two independent encoder rows are wired in `_setup_device_and_transport_control` and
+`_setup_global_control`:
 
-**How it works:**
+| Row | CC range | Python list | Current Pan-mode role |
+|-----|----------|-------------|----------------------|
+| Device encoders (bottom) | CC 16-23, ch 0 | `device_param_controls` (8x `RingedEncoderElement`) | Connected to `ShiftableDeviceComponent` — parameters 1-8 of selected device |
+| Top encoders (global) | CC 48-55, ch 0 | `_global_param_controls` (8x `RingedEncoderElement`) | Connected to per-track panning via `EncModeSelectorComponent` when mode_index == 0 |
 
-1. Register a timer callback in `__init__` — it fires every tick (100ms).
-2. On button press-down (`value != 0`): record that button is held, start a counter.
-3. On each timer tick: if button is held, increment counter.
-4. If counter reaches threshold (4 ticks = 400ms): the press is "long" — activate momentary behavior immediately.
-5. On button release (`value == 0`): check whether a long press was in progress.
-   - If long press was in progress: revert the momentary state (release the hold).
-   - If timer never reached threshold: treat as short press — toggle.
+The goal is: when Pan mode is active, top encoders map to device params 1-8 AND device
+encoders map to device params 9-16 simultaneously, giving 16 parameters total.
 
-**API:**
+### Why the existing `DeviceComponent.set_parameter_controls` works for this
+
+`DeviceComponent._assign_parameters` iterates `zip(self._parameter_controls, bank)` and
+calls `control.connect_to(parameter)` on each pair. If you pass a tuple of 16 controls and
+provide a 16-element bank, it connects all 16. The method is already correct — only the
+inputs need to change.
+
+**Confidence: HIGH** — verified in `_Framework/DeviceComponent.py` line 321-331.
+
+### The bank-size problem and correct solution
+
+`_Generic.Devices.parameter_banks(device)` always partitions parameters into groups of 8.
+For generic (non-DEVICE_DICT) devices it calls `group(device_parameters_to_map(device), 8)`,
+where `group` uses `zip_longest(*[lst[i::n] for i in range(n)])` — column-major interleaving,
+not sequential rows. `bank[0]` does NOT contain parameters 1-8; it contains parameters at
+indices 0, 8, 16, 24... This makes `_current_bank_details` wrong for the 16-param use case.
+
+**Correct approach:** bypass the bank system entirely for the 16-param case. Access
+`device.parameters[1:17]` directly. `parameters[0]` is always "Device On/Off"; parameters
+1-16 are the first 16 controllable parameters (macro parameters for instruments and effects
+with macros, or sequential device parameters otherwise).
+
+**Confidence: HIGH** — verified by reading `_Generic/Devices.py` lines 355-381 and
+`_Framework/Util.py` lines 176-178.
+
+### Recommended implementation: new `SixteenParamDeviceComponent`
+
+Create a new file `SixteenParamDeviceComponent.py` that subclasses `DeviceComponent` and
+overrides `_assign_parameters`:
 
 ```python
+from _Framework.DeviceComponent import DeviceComponent
+from ableton.v2.base import liveobj_valid
+
+class SixteenParamDeviceComponent(DeviceComponent):
+    """DeviceComponent that maps up to 16 device parameters directly to controls."""
+
+    def _assign_parameters(self):
+        if self._parameter_controls is None or not liveobj_valid(self._device):
+            return
+        # parameters[0] is Device On/Off; skip it.
+        mappable = [p for p in self._device.parameters[1:] if liveobj_valid(p)]
+        for index, control in enumerate(self._parameter_controls):
+            if control is None:
+                continue
+            if index < len(mappable):
+                control.connect_to(mappable[index])
+            else:
+                control.release_parameter()
+        self._bank_name = 'Params 1-16'
+```
+
+Pass it a 16-element tuple: `tuple(device_param_controls) + tuple(global_param_controls)`.
+When Pan mode activates in `EncModeSelectorComponent`, call
+`sixteen_param_device.set_enabled(True)` and clear pan assignments from the mixer strips;
+when leaving Pan mode, disable it and restore assignments.
+
+**Why not subclass `ShiftableDeviceComponent`:** `ShiftableDeviceComponent` adds
+shift-guarded bank navigation and `ChannelTranslationSelector` on top of `DeviceComponent`.
+The 16-param mode never needs bank navigation (both rows are locked to params 1-16). A
+direct `DeviceComponent` subclass is simpler and avoids the translation-selector complexity.
+
+**Why not call `set_parameter_controls` twice on the existing `ShiftableDeviceComponent`:**
+`set_parameter_controls` stores a single `_parameter_controls` reference. Calling it a
+second time replaces the first. Two separate `DeviceComponent` instances with 8 controls
+each would fight over `_device_bank_registry.set_device_bank` and `appointed_device`
+listener — they would step on each other on every device change.
+
+### Mode activation wiring
+
+`EncModeSelectorComponent.update()` is called every time the mode changes. In the
+`_mode_index == 0` branch (Pan mode), add:
+
+1. For each of the 8 mixer strips: call `strip.set_pan_control(None)` (releases panning
+   assignment from top encoders).
+2. Enable the `SixteenParamDeviceComponent` with combined 16-encoder tuple.
+3. In all other mode branches: disable `SixteenParamDeviceComponent` and restore the normal
+   `strip.set_pan_control(control)` assignments.
+
+`EncModeSelectorComponent` already holds a `_mixer` reference and calls
+`self._mixer.channel_strip(index).set_pan_control(...)` — this is the exact hook needed.
+Add a `_sixteen_param_device` reference injected at construction time.
+
+**Confidence: HIGH** — `EncModeSelectorComponent.update()` already owns this switching
+logic; the pattern is a direct extension of what exists.
+
+### LED ring modes on the top encoders in Pan mode
+
+`RingedEncoderElement.set_ring_mode_button` links the CC 56-63 buttons to the encoder ring
+display. In Pan mode, the top encoders will show device parameter feedback via
+`connect_to(parameter)`. The ring mode button is already wired; no changes needed there.
+The ring mode will display whatever the connected parameter reports.
+
+---
+
+## Feature 2: Toggle/Momentary for Send A/B/C Buttons
+
+### What these buttons are
+
+The four buttons at MIDI note 87-90 (channel 0) are the global encoder mode selectors:
+
+| Note | Name | Current behavior |
+|------|------|-----------------|
+| 87 | Pan_Button | Sets encoder mode to 0 (Pan/device panning) |
+| 88 | Send_A_Button | Sets encoder mode to 1 (Send A) |
+| 89 | Send_B_Button | Sets encoder mode to 2 (Send B) |
+| 90 | Send_C_Button | Sets encoder mode to 3 (Send C) |
+
+These are NOT per-track send enable/disable buttons. They select which parameter the 8 top
+encoders control. Toggle/momentary on these buttons means: short press locks that encoder
+mode; long press temporarily enters that encoder mode while held, then reverts to the
+previous mode on release.
+
+### Existing partial implementation in `EncModeSelectorComponent`
+
+`EncModeSelectorComponent` already implements long-press for the Pan button specifically via
+`_pan_to_vol_ticks_delay` and `_on_timer`. The logic switches between Pan and Volume
+sub-modes. This is the exact pattern to generalise across all four buttons.
+
+The existing timer infrastructure is already registered (`_register_timer_callback` called in
+`__init__`, `_unregister_timer_callback` called in `disconnect`). No new timer wiring is
+needed.
+
+### Recommended implementation
+
+Extend `EncModeSelectorComponent._mode_value` and `_on_timer` to track a
+`_mode_before_long_press` state and revert on release, using the same `LONG_PRESS_DELAY = 4`
+constant from v1.0:
+
+```python
+LONG_PRESS_DELAY = 4  # 4 ticks x 100ms = ~400ms (matches Solo/Mute threshold)
+
 # In __init__:
-self._register_timer_callback(self._on_timer)
+self._send_momentary_ticks = -1
+self._mode_before_long_press = -1
 
-# In disconnect:
-self._unregister_timer_callback(self._on_timer)
+# In _mode_value:
+def _mode_value(self, value, sender):
+    if self.is_enabled():
+        index = self._modes_buttons.index(sender)
+        if value != 0:
+            if self._shift_pressed:  # existing shift guard pattern
+                return
+            self._mode_before_long_press = self._mode_index
+            self.set_mode(index)
+            self._send_momentary_ticks = LONG_PRESS_DELAY
+        else:  # release
+            if self._send_momentary_active:
+                self.set_mode(self._mode_before_long_press)
+                self._send_momentary_active = False
+            self._send_momentary_ticks = -1
 
-# In value listener:
-def _solo_value(self, value):
-    if value != 0:
-        self._solo_press_ticks = 0   # start counting
-        self._solo_long_press_active = False
-        # Apply state immediately for momentary — will revert if short press on release
-        self._apply_solo_on_press()
-    else:
-        self._on_solo_released()
-
-# Timer fires every ~100ms:
-def _on_timer(self):
-    if self._solo_press_ticks >= 0:   # -1 means no press in progress
-        self._solo_press_ticks += 1
-        if self._solo_press_ticks == LONG_PRESS_DELAY:
-            self._solo_long_press_active = True
-            # already applied on press-down; LED is correct
+# In _on_timer:
+if self._send_momentary_ticks > -1:
+    if self._send_momentary_ticks == 0:
+        self._send_momentary_active = True
+    self._send_momentary_ticks -= 1
 ```
 
-**Confidence: HIGH** — `_register_timer_callback` / `_unregister_timer_callback` are confirmed API methods on `ControlSurfaceComponent` (`ControlSurfaceComponent.py` lines 161-172). Their internals use `Task.FuncTask` on the parent task group, ticked at `TIMER_DELAY = 0.1s`.
+This replaces the existing `_pan_to_vol_ticks_delay` mechanism with a unified approach that
+covers all four mode buttons.
 
-**Why this approach over alternatives:**
-- No new imports needed.
-- Already proven working in this exact codebase (`SpecialChanStripComponent._on_timer`).
-- Single callback handles all 8 solo buttons and 8 mute buttons efficiently if the per-strip counters are instance variables.
-- Minimal surface area — does not touch the Framework's button routing or MIDI map.
+**Confidence: HIGH** — directly mirrors `ToggleMomentaryChannelStripComponent` pattern which
+is proven in this codebase. `EncModeSelectorComponent` already has the timer registered and
+the `_modes_buttons` list populated.
 
----
+### Shift guard requirement
 
-### Approach 2: `self._tasks.add(Task.sequence(Task.wait(...), ...))` (VIABLE ALTERNATIVE)
-
-This is the pattern used in `pushbase`, `ModesComponent`, and Ableton's own internal long-press detection.
-
-**How it works:**
+`EncModeSelectorComponent._mode_value` has no shift guard today. Add the same guard used in
+`_handle_toggle_momentary`:
 
 ```python
-from _Framework import Task
-
-# In __init__ (create task, start killed):
-self._solo_long_press_task = self._tasks.add(
-    Task.sequence(
-        Task.wait(0.4),           # 400ms in seconds
-        Task.run(self._on_solo_long_press)
-    )
-)
-self._solo_long_press_task.kill()
-
-# On press-down:
-self._solo_long_press_task.restart()
-self._apply_solo_on_press()
-
-# On release:
-if self._solo_long_press_task.is_running:
-    # Task hasn't fired — short press
-    self._solo_long_press_task.kill()
-    self._handle_solo_short_press()
-# else: long press already handled by task callback
+if self._shift_pressed:
+    return
 ```
 
-**Confidence: HIGH** — confirmed in `_Framework/ModesComponent.py` line 514 and `pushbase/loop_selector_component.py` line 80. `Task.wait` takes seconds. `self._tasks` is a `lazy_attribute` on `ControlSurfaceComponent` that creates a `TaskGroup` on first access.
+`EncModeSelectorComponent` does not currently track `_shift_pressed`. Either add a
+`set_shift_button` setter (same pattern as `ShiftableDeviceComponent`) or check whether
+`ShiftableEncoderSelectorComponent._toggle_pressed` is accessible via `self._parent`. The
+simpler approach is adding `set_shift_button` directly to `EncModeSelectorComponent` — it
+already has `self._mixer` so the constructor can take an extra optional button.
 
-**Why this is an alternative, not the primary recommendation:**
-- `self._tasks` is a `lazy_attribute` that requires the `@depends(parent_task_group=None)` injection chain to be active. It works, but accessing it before `register_component` has run causes a runtime error. The existing codebase (`SpecialChanStripComponent`) deliberately does NOT use `self._tasks` — it uses `_register_timer_callback` instead. Staying consistent with the existing pattern is lower risk.
-- One task object per button (16 total for 8 solo + 8 mute) is manageable but adds more state to track in `disconnect()`.
-
----
-
-## What NOT to Use
-
-### `time.time()` or `time.monotonic()`
-
-**Do not use Python's wall-clock time functions for press duration.**
-
-Ableton's embedded Python environment does include standard `time` module access, but using `time.time()` for press duration detection creates problems:
-
-- You would need to store the press timestamp and compute elapsed time in the release handler. This works, but it runs outside the _Framework task system and is not paused/resumed when the component is disabled.
-- More importantly: the _Framework timer system is the correct abstraction layer. Using wall-clock time bypasses it and creates two different timing systems in the same component.
-
-**Confidence: MEDIUM** — `time` module availability confirmed by community practice; the architectural argument against it is reasoning, not an official restriction.
-
-### `schedule_message` (on `ControlSurface`)
-
-**Do not use `self.schedule_message()`** for this feature.
-
-`schedule_message` is defined on `ControlSurface`, not on `ControlSurfaceComponent`. `SpecialChanStripComponent` does not have access to it directly. It is designed for one-shot deferred calls (e.g., delaying hardware updates after a state change), not for press-duration tracking. Using it would require the component to hold a reference to the top-level surface, which violates the existing architectural boundary.
-
-**Confidence: HIGH** — verified by reading `ControlSurface.py` and confirming `ControlSurfaceComponent` does not inherit from `ControlSurface`.
-
-### `_Framework.ButtonElement` subclassing to add timing
-
-**Do not add timing logic to `ConfigurableButtonElement` or a new `ButtonElement` subclass.**
-
-Timing belongs in the component, not the element. Elements are stateless MIDI I/O wrappers. The existing codebase follows this separation strictly — `ConfigurableButtonElement` handles MIDI value routing and LED state only. Adding press-duration state to an element would break the component/element boundary and make the element non-reusable.
-
-**Confidence: HIGH** — this is a direct reading of the existing architecture.
+**Confidence: HIGH** — `ShiftableDeviceComponent` provides the exact reference implementation
+for this pattern.
 
 ---
 
-## Where the Code Lives
-
-**File to modify:** `SpecialChanStripComponent.py`
-
-This is the correct place because:
-- It already owns the solo and mute value handler methods (`_solo_value` is inherited from `ChannelStripComponent` and needs to be overridden here).
-- It already has `_register_timer_callback` / `_unregister_timer_callback` wired up — `_on_timer` exists and is called every tick.
-- Each `SpecialChanStripComponent` instance corresponds to exactly one track, so instance variables like `_solo_press_ticks` map cleanly to per-track state.
-
-**No other files should need modification** for the core behavior. LED feedback calls (`_solo_button.turn_on()` / `.turn_off()`) are already in `ChannelStripComponent._on_solo_changed()`, which is triggered by Live's property change notification whenever `track.solo` changes — so LED updates happen automatically when the Live track state changes.
-
----
-
-## Key API Summary
+## APIs Used (New or Changed for This Milestone)
 
 | API | Location | Purpose | Confidence |
 |-----|----------|---------|------------|
-| `_register_timer_callback(fn)` | `ControlSurfaceComponent` | Register function called every ~100ms tick | HIGH |
-| `_unregister_timer_callback(fn)` | `ControlSurfaceComponent` | Remove timer callback (call in `disconnect()`) | HIGH |
-| `_on_timer()` (override) | `SpecialChanStripComponent` | Existing hook, already fires every tick | HIGH |
-| `track.solo` (read/write) | `Live.Track` | Read or set solo state | HIGH |
-| `track.mute` (read/write) | `Live.Track` | Read or set mute state | HIGH |
-| `self._tasks` | `ControlSurfaceComponent` | Alternative: task group for `Task.wait`-based timing | HIGH |
-| `Task.wait(seconds)` | `_Framework/Task.py` | Wait task consuming real-time seconds | HIGH |
-| `Defaults.TIMER_DELAY` | `_Framework/Defaults.py` | Tick rate constant (0.1 seconds) | HIGH |
+| `device.parameters[1:17]` | `Live.Device` | Direct sequential parameter access, bypasses bank system | HIGH |
+| `control.connect_to(parameter)` | `_Framework.InputControlElement` | Connect encoder to Live parameter | HIGH |
+| `control.release_parameter()` | `_Framework.InputControlElement` | Disconnect encoder from parameter | HIGH |
+| `DeviceComponent.set_parameter_controls(controls)` | `_Framework.DeviceComponent` | Register controls with device component | HIGH |
+| `DeviceComponent.set_device(device)` | `_Framework.DeviceComponent` | Point component at selected device | HIGH |
+| `song().add_appointed_device_listener` | `Live.Song` | Respond to device selection changes | HIGH |
+| `_register_timer_callback` / `_unregister_timer_callback` | `_Framework.ControlSurfaceComponent` | Already used in this codebase | HIGH |
+| `ChannelStripComponent.set_pan_control(None)` | `_Framework.ChannelStripComponent` | Release pan assignment when Pan mode activates | HIGH |
 
 ---
 
-## Tick Rate Calculation Reference
+## APIs NOT to Use
 
-| Desired threshold | Ticks required | Formula |
-|------------------|---------------|---------|
-| 300ms (Framework default `MOMENTARY_DELAY`) | 3 | 0.3 / 0.1 |
-| 400ms (project requirement) | 4 | 0.4 / 0.1 |
-| 500ms | 5 | 0.5 / 0.1 |
+### `parameter_banks(device)` for 16-param mapping
 
-With `_register_timer_callback`, use tick counting. With `self._tasks + Task.wait()`, pass seconds directly (e.g., `Task.wait(0.4)`).
+`parameter_banks` returns column-interleaved groups of 8, not sequential rows. Using it
+for the 16-param case gives wrong parameter ordering on any device with more than 8
+parameters. Access `device.parameters[1:17]` directly.
+
+### `ChannelTranslationSelector` on 16 controls
+
+`ShiftableDeviceComponent` wraps the 8 device encoders in a `ChannelTranslationSelector(8)`
+for bank navigation. For the 16-param mode, bank navigation is disabled — both encoder rows
+are locked to params 1-16. Do not pass the 16 combined controls through a translation
+selector.
+
+### Modifying `ShiftableDeviceComponent` to hold 16 controls
+
+`ShiftableDeviceComponent` hardcodes 8-control assumptions in `set_parameter_controls`
+(assertion `len(controls) == 8` is not there, but `ChannelTranslationSelector(8)` is). More
+importantly, `ShiftableDeviceComponent` already has its own device-tracking and bank
+navigation that serves the existing 8-param mode. Expanding it to 16 in-place would entangle
+two unrelated modes and make both harder to test. Keep them separate.
+
+### Modifying `EncoderDeviceComponent` for 16-param mode
+
+`EncoderDeviceComponent` manages an alternative device control path that wraps
+`DeviceComponent` internally. It has its own lock, on/off, and device-follow logic. It is
+not the right base for the 16-param map because its wiring assumptions (4 mode buttons, lock
+button as buttons[0]) conflict with what the Pan-mode use case needs.
+
+---
+
+## Files to Create or Modify
+
+| File | Action | Why |
+|------|--------|-----|
+| `SixteenParamDeviceComponent.py` | **Create** | New `DeviceComponent` subclass, overrides `_assign_parameters` for direct 16-param mapping |
+| `EncModeSelectorComponent.py` | **Modify** | Extend existing `_on_timer` + `_mode_value` for send button toggle/momentary; add shift guard; accept `_sixteen_param_device` reference |
+| `APC_64_40_9.py` | **Modify** | Instantiate `SixteenParamDeviceComponent`, wire combined 16-encoder tuple, pass reference to `EncModeSelectorComponent` |
+
+**Do not modify:** `ToggleMomentaryChannelStripComponent`, `SpecialChanStripComponent`,
+`ShiftableDeviceComponent`, `SpecialMixerComponent`, `ShiftableEncoderSelectorComponent`,
+`EncoderUserModesComponent`. None of these are in the change path.
+
+---
+
+## Test Stub Requirements
+
+The existing `framework_stubs.py` needs additions for new test coverage:
+
+- `DeviceStub` with `parameters` list (index 0 = on/off placeholder, indices 1-16 = mock
+  params). Each parameter stub needs `connect_to` / `release_parameter` tracking.
+- `SixteenParamDeviceComponentStub` or direct instantiation with stubs — same pattern as
+  `SpecialChanStripStub`.
+
+The v1.0 `TrackStub`, `SongStub`, `ButtonStub` patterns do not need to change.
 
 ---
 
 ## Sources
 
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/Defaults.py` — `TIMER_DELAY = 0.1`, `MOMENTARY_DELAY = 0.3` (source timestamp 2025-03-17)
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ControlSurfaceComponent.py` — `_register_timer_callback`, `_unregister_timer_callback`, `_tasks` lazy attribute
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/Task.py` — `WaitTask`, `FuncTask`, `TaskGroup`, `sequence`, `wait`
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ChannelStripComponent.py` — `_solo_value`, `_mute_value`, `_on_solo_changed`, `_on_mute_changed`
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ModesComponent.py` — `add_mode` using `Task.sequence(Task.wait(MOMENTARY_DELAY), ...)` pattern
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/MomentaryModeObserver.py` — `_timer_count >= Defaults.MOMENTARY_DELAY_TICKS` tick-counting pattern
-- `/Users/stoersignal/Dev/APC_64_40_12/SpecialChanStripComponent.py` — existing `_register_timer_callback` / `_on_timer` usage in this codebase
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/pushbase/loop_selector_component.py` — `self._tasks.add(task.sequence(task.wait(...)))` pattern
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/DeviceComponent.py` — `_assign_parameters`, `set_parameter_controls`, `_current_bank_details` (source timestamp 2025-03-17)
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Generic/Devices.py` — `parameter_banks`, `group` usage, `number_of_parameter_banks` (source timestamp 2025-03-17)
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/Util.py` — `group(lst, n)` column-major interleave implementation
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ChannelStripComponent.py` — `set_send_controls`, `_connect_parameters`, send index mapping
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ControlSurfaceComponent.py` — `_register_timer_callback`, `_unregister_timer_callback`
+- `/Users/stoersignal/Dev/APC_64_40_12/EncModeSelectorComponent.py` — existing `_pan_to_vol_ticks_delay` / `_on_timer` pattern
+- `/Users/stoersignal/Dev/APC_64_40_12/ToggleMomentaryChannelStripComponent.py` — reference implementation for toggle/momentary timer pattern
+- `/Users/stoersignal/Dev/APC_64_40_12/APC_64_40_9.py` — encoder CC assignments, mode wiring, global bank button assignments
+- `/Users/stoersignal/Dev/APC_64_40_12/ShiftableDeviceComponent.py` — shift guard pattern, `ChannelTranslationSelector` usage

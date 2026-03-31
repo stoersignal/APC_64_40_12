@@ -1,17 +1,17 @@
 # Project Research Summary
 
-**Project:** APC40 Toggle/Momentary Button Behavior (APC_64_40_12)
-**Domain:** Ableton Live _Framework MIDI control surface scripting
+**Project:** APC40 Toggle/Momentary Button Behavior — v1.1 16Macros Milestone
+**Domain:** Ableton Live _Framework MIDI control surface scripting — encoder expansion + mode button behavior
 **Researched:** 2026-03-31
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This milestone adds dual-behavior (short press = toggle, long press = momentary) to the Solo and Mute buttons in a custom APC40 Ableton Live control surface script. The research is grounded in direct source analysis of the Live 12.1 decompiled `_Framework` and the existing project codebase — there is no guesswork about API availability or timing mechanics. The correct implementation pattern is already present in this codebase: `SpecialChanStripComponent` uses `_register_timer_callback` with a tick countdown for fold-delay detection. The new feature follows the identical pattern.
+This is a subsequent milestone on a proven codebase. The v1.0 toggle/momentary pattern for Solo and Mute buttons is fully implemented, tested, and hardened — including shift guards and `disconnect()` revert. The v1.1 16Macros milestone adds two independent feature clusters: (1) repurposing Pan mode to simultaneously map both encoder rows (16 controls total) to device parameters 1-16, and (2) extending the existing `EncModeSelectorComponent` mode buttons to behave as toggle/momentary selectors using the same ~400ms threshold from v1.0. Both features are well-scoped with clear anchor points in the existing code.
 
-The recommended approach is to create a new `ToggleMomentaryChannelStripComponent` class that extends `SpecialChanStripComponent`, add per-button tick counters and pre-press state capture in that class, and change a single factory method in `SpecialMixerComponent` to use it. The total new code is approximately 70-90 lines in one new file plus a one-line change in one existing file. No changes are required to the composition layer, the button element layer, the shift selector, or any other component.
+The recommended approach is to implement these as two sequential phases with a strict build order. The 16-parameter encoder mapping requires a new `Pan16DeviceComponent` and careful component ownership management — one DeviceComponent instance per 8-encoder row, each locked to a specific bank. The toggle/momentary mode buttons are a direct modification to `EncModeSelectorComponent`'s existing timer infrastructure, transposing the proven pattern from boolean track attributes to encoder mode indices. No existing components need fundamental restructuring; the changes are additive and localized to three files.
 
-The primary risk is correctness in the state machine logic, not architectural uncertainty. Three patterns in particular must be implemented precisely: (1) state must be applied at press-down rather than at the threshold, (2) pre-press state must be captured at press-down not at release, and (3) the `_unregister_timer_callback` call must be paired with every registration call or the timer leaks. All three are well-documented in the research with concrete examples from the existing codebase.
+The highest risks are in the encoder feature: dual assignment of controls without proper release will silently corrupt state, and the interaction between two DeviceComponent instances targeting the same device is not officially documented (though the `_alt_device` pattern in `EncoderDeviceComponent` demonstrates it is possible). The send button feature carries one critical design ambiguity — the physical Send A/B/C buttons serve as both global encoder mode selectors and (in the new design) mode toggle/momentary triggers. The ARCHITECTURE.md research confirmed the toggle/momentary applies to the mode selection itself (not per-track send enable), but this must be stated explicitly in any plan before coding begins to prevent the mode-latch vs. momentary-revert conflict.
 
 ---
 
@@ -19,123 +19,113 @@ The primary risk is correctness in the state machine logic, not architectural un
 
 ### Recommended Stack
 
-The entire implementation lives within the existing `_Framework` timer system. No external libraries, new imports, or new architectural patterns are required. The Framework's `_register_timer_callback` / `_unregister_timer_callback` API (on `ControlSurfaceComponent`) fires a registered function at approximately 100ms intervals — this is the tick system, driven by Ableton's C++ host at a fixed rate defined in `_Framework/Defaults.py`. A 400ms long-press threshold equals exactly 4 ticks.
+No new technologies are required for this milestone. The entire implementation uses the existing Python-in-Ableton-Live environment with `_Framework` APIs. The v1.0 timer infrastructure (`_register_timer_callback`, `LONG_PRESS_DELAY = 4`) is reused verbatim for the encoder mode toggle/momentary feature. New code is confined to three files: one new file (`Pan16DeviceComponent.py`, ~50 lines) and targeted modifications to `EncModeSelectorComponent.py` and `APC_64_40_9.py`.
+
+One critical stack constraint: the `_Generic.Devices.parameter_banks()` function uses column-major interleaving, not sequential row ordering. Any attempt to use it for 16-param mapping produces wrong parameter ordering on devices with more than 8 parameters. Access `device.parameters[1:17]` directly to get sequential parameter access — this bypasses the bank system entirely and is verified against the decompiled `_Generic/Devices.py` source.
 
 **Core technologies:**
-- `_register_timer_callback(fn)` / `_unregister_timer_callback(fn)`: timing mechanism — already proven in this codebase, correct abstraction layer, runs on Live's main thread
-- `self._track.solo` / `self._track.mute` (read/write): Live track state API — direct property access, fires `_on_solo_changed` listener automatically on write (LED updates are free)
-- `SpecialChanStripComponent._on_timer`: existing hook that fires every tick — new class calls `super()._on_timer()` and adds press-duration logic
-- `TRACK_FOLD_DELAY = 5` constant pattern: the naming and placement precedent for `LONG_PRESS_THRESHOLD_TICKS = 4`
-
-The alternative `self._tasks + Task.wait(seconds)` pattern (used in `pushbase` and `ModesComponent`) is viable but inconsistent with how this specific codebase is built. Staying with `_register_timer_callback` keeps the new code idiomatic to the project.
+- `_Framework.DeviceComponent` — base class for `Pan16DeviceComponent`; `_assign_parameters` connects controls to Live device parameters via standard `connect_to()` calls
+- `device.parameters[1:17]` (Live API) — direct sequential access to first 16 device parameters; `parameters[0]` is always "Device On/Off" and is skipped
+- `_register_timer_callback` / `EncModeSelectorComponent._on_timer` — existing timer hook; extended for send button toggle/momentary; no new timer registration needed
+- `RingedEncoderElement.connect_to(parameter)` / `release_parameter()` — standard encoder-to-parameter wiring; ring LEDs update automatically from parameter type
 
 ### Expected Features
 
-This milestone has no partial delivery — either the dual-mode works correctly or it does not. The full MVP is all that ships.
+**Must have (table stakes — encoder cluster):**
+- Pan mode: top 8 encoders (CC 48-55) connected to device params 1-8
+- Pan mode: device encoders (CC 16-23) connected to device params 9-16
+- Switching out of Pan mode cleanly releases all 16 parameter connections
+- Ring LEDs function correctly on both encoder rows in Pan mode
+- Device lock state respected (locked device followed when lock is active)
+- Appointed device changes during Pan mode update both encoder rows immediately
 
-**Must have (table stakes):**
-- Short press toggle (preserved, unchanged from current behavior)
-- Long press activates momentary with immediate state change at press-down
-- State reverts to pre-press value on release (not to a fixed "off" state)
-- Long press on already-active state inverts (momentarily un-solos a soloed track)
-- LED reflects real track state in real time (inherited from framework, requires no extra code)
-- Zero latency on short press classification
-- Shift + Solo and Shift + Mute existing behaviors preserved
+**Must have (table stakes — send button cluster):**
+- Short press on any mode button (Pan/Send A/B/C) permanently selects that mode (existing behavior, preserved)
+- Long press on Send A/B/C mode button activates that mode while held, reverts to prior mode on release
+- Same 400ms threshold (LONG_PRESS_DELAY = 4 ticks) as Solo/Mute
+- Shift guard: shift + Send A/B/C does not trigger momentary behavior
+- `disconnect()` reverts any active momentary mode hold on teardown
 
-**Should have (quality differentiators):**
-- State captured at press-down (not release) — ensures correct revert under external state changes
-- Consistent behavior between Solo and Mute buttons — same code pattern for both
-- `LONG_PRESS_THRESHOLD_TICKS = 4` as a named constant — 400ms, tuned for performance use
-
-**Defer (future milestone):**
-- Configurable threshold (no settings system needed now)
-- Track Activator (arm) buttons — different state semantics, out of scope
-- Any other button types — clip launch, transport, etc.
+**Defer to v2+:**
+- Configurable press threshold
+- Bank navigation behavior in 16-param mode (leave existing bank nav as-is and document the limitation)
+- Any new button types beyond the four mode buttons
 
 ### Architecture Approach
 
-The implementation uses a single new component class (`ToggleMomentaryChannelStripComponent`) that extends `SpecialChanStripComponent`. Each of the 8 per-track instances owns its own press state independently — this is the correct granularity because two tracks can be held simultaneously. The factory method `SpecialMixerComponent._create_strip()` is the only change to existing files beyond the new file and its import. Timing logic does not belong in the button element, in the mixer, or in the composition layer.
+The 16-param feature uses two new `Pan16DeviceComponent` instances — one locked to bank 0 (params 1-8) for the top encoders, one locked to bank 1 (params 9-16) for the device encoders. `EncModeSelectorComponent` activates both in its mode 0 (Pan) branch and deactivates them in all other branches. The existing `ShiftableDeviceComponent` is disconnected from the device encoder row during Pan mode by passing `None` to `set_parameter_controls()` from the composition layer — no changes to `ShiftableDeviceComponent` itself. The toggle/momentary mode buttons are implemented entirely within `EncModeSelectorComponent` by extending its existing `_on_timer` and `_mode_value` methods with per-button tick countdown state.
 
 **Major components:**
-1. `ToggleMomentaryChannelStripComponent` (new, ~70-90 lines) — per-track press-duration state machine, overrides `_solo_value`, `_mute_value`, and `_on_timer`; handles short/long press classification, pre-press state capture, momentary activation, and revert-on-release
-2. `SpecialMixerComponent` (modified, 2-line change) — import + factory method returns new class
-3. `ChannelStripComponent` (Framework base, unchanged) — provides `self._track`, `_on_solo_changed` LED update listener, `set_solo_button` / `set_mute_button` reconnect logic
+1. `Pan16DeviceComponent` (new, ~50 lines) — extends `DeviceComponent`; fixed bank index (0 or 1); tracks appointed device via `song().add_appointed_device_listener`; exposes `set_parameter_controls()`
+2. `EncModeSelectorComponent` (modified) — Pan mode routing to two `Pan16DeviceComponent` instances; toggle/momentary timer state for all four mode buttons using existing `_on_timer`
+3. `APC_64_40_9._setup_global_control()` (modified) — promotes `device_param_controls` to instance variable; instantiates and wires two `Pan16DeviceComponent` instances; passes references to `EncModeSelectorComponent` via setters or constructor
+4. `ToggleMomentaryChannelStripComponent` (no change) — v1.0 component unaffected by both features
+5. `ShiftableDeviceComponent` (no change) — disconnected from encoders during Pan mode by composition layer, not by internal modification
 
 ### Critical Pitfalls
 
-1. **Activating state at the threshold instead of at press-down** — Apply state change in the `value != 0` branch of the value handler; the timer only marks the threshold as crossed, it does not trigger the action. Violating this causes 400ms latency on every press.
+1. **Dual-assignment of encoders without release (Pitfall E1)** — call `release_parameter()` on every control before `connect_to()` in a new mode; follow the `EncoderUserModesComponent._set_modes()` canonical teardown pattern which explicitly iterates and releases before reassigning.
 
-2. **Not pairing `_unregister_timer_callback` with every registration** — Write the `disconnect()` call immediately when adding the `__init__` registration. `StepSequencerComponent` in this codebase has this exact bug already; it must not be repeated.
+2. **16-element tuple passed to `EncModeSelectorComponent.set_controls()` (Pitfall E2)** — the component asserts `len(controls) == 8` and maps controls 1:1 to mixer channel strips; passing 16 controls crashes on load or silently only assigns the first 8. Use two separate `Pan16DeviceComponent` instances, each receiving 8 controls.
 
-3. **Placing logic in `_on_solo_changed` instead of `_solo_value`** — `_on_solo_changed` fires on any external track state change, not just button presses. Press-duration logic belongs only in `_solo_value` / `_mute_value`. The two method names sound similar; consult `ChannelStripComponent.py` source before writing the override.
+3. **Device encoder parameters not released on mode exit (Pitfall E3)** — every `connect_to()` call in the Pan mode activation path must have a matching `release_parameter()` call in every non-Pan mode branch of `EncModeSelectorComponent.update()`; orphaned connections cause stuck encoders and stale ring LEDs.
 
-4. **Capturing pre-press state at release instead of press-down** — `self._solo_state_before_press = self._track.solo` must be inside `if value != 0:`, not `else:`. Automation, scene launches, or exclusive-solo propagation can change the track state during a hold, making a release-time capture unreliable.
+4. **Mode-latch vs. momentary-revert semantic conflict (Pitfall S6/S1)** — encoder mode selection is a persistent latch; momentary behavior is transient. These are two asymmetric release semantics on the same physical button. The v1.1 design resolves this by applying momentary behavior to the mode selection itself (the mode reverts on release), not to any per-track send enable. This must be explicit in the plan before code is written.
 
-5. **Failing to preserve the shift guard** — The `_solo_value` override must check `_shift_pressed` (or the equivalent guard used in this component) and return early before entering the toggle/momentary logic. Shift + Solo is wired to the step sequencer's loop-length paging — silently breaking this is a regression invisible in simple testing.
+5. **Bank state not preserved on mode re-entry (Pitfall E5)** — `ShiftableDeviceComponent` freely changes `_bank_index` via shift+bank buttons; when returning to Pan mode after bank navigation, the device encoder row must explicitly re-lock to bank 1, not rely on the last bank index. `Pan16DeviceComponent` with a fixed `bank_index` constructor argument solves this by design.
 
 ---
 
 ## Implications for Roadmap
 
-Based on research, the work is small and well-defined. A single linear sequence of steps is appropriate; there are no parallel workstreams.
+Two phases are recommended. The build order is driven by the dependency that Phase 2's timer changes interact with `EncModeSelectorComponent.update()`, which is also Phase 1's integration point — doing Phase 1 first means Phase 2 tests verify against a fully wired update method.
 
-### Phase 1: Component Scaffolding
+### Phase 1: 16-Parameter Encoder Mapping (Pan Mode)
 
-**Rationale:** Creating the new class with no behavior change first gives a clean verification checkpoint. If the script loads and all existing behavior is intact, the scaffolding is correct. This separates "did I break the wiring?" from "does the new logic work?" — which makes debugging faster.
+**Rationale:** Encoder ownership and component wiring must be established before the toggle/momentary mode button behavior is layered on top. A clean, loadable script at the end of Phase 1 provides a verified baseline for Phase 2's changes.
 
-**Delivers:** `ToggleMomentaryChannelStripComponent.py` with passthrough `__init__`, import added to `SpecialMixerComponent.py`, factory method returns new class. Script loads cleanly in Live. All existing behavior identical.
+**Delivers:** Pan mode simultaneously maps device params 1-8 via top encoders and params 9-16 via device encoders. Clean teardown on mode exit to Send A/B/C. Ring LEDs functional on both rows. Appointed device changes update both rows.
 
-**Addresses:** Architecture integration points 1 and 2 from ARCHITECTURE.md (factory method + class definition).
+**Build order within phase:**
+1. Promote `device_param_controls` to `self._device_param_controls` in `_setup_device_and_transport_control()` — no behavior change; verify script loads
+2. Create `Pan16DeviceComponent.py` with two instances (bank 0, bank 1) wired but not yet active — verify script loads without error
+3. Modify `EncModeSelectorComponent.update()` mode 0 branch to release mixer pan, activate both `Pan16DeviceComponent` instances, disconnect `ShiftableDeviceComponent`; all other modes do the reverse
+4. Edge cases: rapid mode switching leaves no stuck assignments; appointed device change during Pan mode; devices with fewer than 16 parameters
 
-**Avoids:** Discovering wiring errors while simultaneously debugging state machine logic.
+**Addresses:** Encoder cluster table-stakes features (FEATURES.md)
+**Avoids:** Pitfalls E1, E2, E3, E5
 
-### Phase 2: Timer Scaffolding and State Variables
+### Phase 2: Toggle/Momentary Send A/B/C Mode Buttons
 
-**Rationale:** Adding the timer registration and state variables before the logic confirms that the timer fires correctly and the state variables initialize cleanly. A log statement in `_on_timer` that is then removed verifies the tick rate empirically.
+**Rationale:** Depends on Phase 1 because the timer state additions in `EncModeSelectorComponent` interact with the same `_on_timer` and `_mode_value` methods modified in Phase 1. Isolating this to Phase 2 keeps each diff readable and allows independent verification in Live.
 
-**Delivers:** `_solo_ticks_delay`, `_mute_ticks_delay`, `_solo_momentary_active`, `_mute_momentary_active`, `_solo_state_before_press`, `_mute_state_before_press` instance variables. `_on_timer` fires every 100ms. `_unregister_timer_callback` called in `disconnect()`. Script behavior still unchanged.
+**Delivers:** Short press on Send A/B/C mode buttons permanently selects that mode (preserved). Long press activates the mode while held and reverts to the previous mode on release (~400ms threshold). Shift guard prevents momentary activation when shift is held. `disconnect()` reverts active momentary mode hold.
 
-**Avoids:** Pitfall 2 (missing unregister) — the unregister is written in this phase alongside the register.
+**Build order within phase:**
+1. Add `_send_ticks_delay` (array of 4), `_send_mode_before_press`, `_send_momentary_active`, `_send_pressed_mode` state variables to `EncModeSelectorComponent.__init__()`
+2. Extend `_mode_value()` to record prior mode and arm timer countdown on press-down (immediate mode activation at press-down, zero latency)
+3. Extend `_on_timer()` to decrement counters, mark threshold crossing, handle revert on release
+4. Add shift guard via `set_shift_button()` setter on `EncModeSelectorComponent` — same pattern as `ShiftableDeviceComponent`
+5. Harden `disconnect()` to revert any active momentary mode before teardown
+6. Decision point: unify existing `_pan_to_vol_ticks_delay` into the new per-button tick array or leave alongside — unified approach preferred (cleaner `_on_timer`), document the decision
 
-### Phase 3: Solo Toggle/Momentary Logic
-
-**Rationale:** Implementing solo first (before mute) halves the testing surface. Mute uses identical logic; once solo is verified correct, mute is a near-copy with high confidence.
-
-**Delivers:** `_solo_value` override implementing the full state machine. Short press toggles solo. Long press activates momentary immediately on press-down, reverts on release. Long press on already-soloed track temporarily unsolos. LED tracks state automatically. Shift guard in place.
-
-**Addresses:** All table stakes features for solo buttons. Features from FEATURES.md: short press toggle, long press momentary, state revert, inversion on active state, LED accuracy, zero latency, shift compatibility.
-
-**Avoids:** Pitfalls 1 (act at press-down), 3 (correct override point), 4 (pre-press state at press-down), 5 (shift guard).
-
-### Phase 4: Mute Toggle/Momentary Logic
-
-**Rationale:** Mirror of Phase 3 for mute buttons. Done separately to keep each phase's test scope clear.
-
-**Delivers:** `_mute_value` override with identical logic to solo. Both solo and mute dual-mode fully operational. Both can be held simultaneously on different tracks.
-
-**Avoids:** Same pitfalls as Phase 3 (re-verified for mute path).
-
-### Phase 5: Edge Case Hardening and Testing
-
-**Rationale:** The state machine has edge cases that are hard to hit accidentally but critical for live performance reliability. These require explicit testing after the happy path works.
-
-**Delivers:** Verified behavior for: long-press on already-active track; rapid consecutive short presses (tick counter reset — Pitfall 7); shift pressed mid-hold (component disable mid-press — Pitfall 10); sequencer mode transition mid-hold; two buttons held simultaneously on different tracks. `set_solo_button(None)` and `set_mute_button(None)` reset state correctly (Pitfall 10 / integration point 4 in ARCHITECTURE.md).
-
-**Avoids:** Pitfalls 7 (counter reset), 10 (state machine on disable), and the moderate/minor pitfalls documented in PITFALLS.md.
+**Addresses:** Send button cluster table-stakes features (FEATURES.md)
+**Avoids:** Pitfalls S1, S5, S6, E4
 
 ### Phase Ordering Rationale
 
-- Scaffolding before logic separates infrastructure problems from logic problems — saves debugging time.
-- Timer scaffolding before state machine logic ensures the tick rate is verified before it is depended upon.
-- Solo before mute halves the complexity at each step; the second is a near-copy of a verified implementation.
-- Edge case testing as a dedicated final phase ensures it is not skipped when the happy path works.
-- There is no phase that benefits from parallel execution — each depends on the prior.
+- Phase 1 before Phase 2 because both phases touch `EncModeSelectorComponent.update()` and `_on_timer`; sequential changes prevent interaction bugs and make code review tractable
+- Both phases are additive — no existing tested components are modified internally, only composition wiring and `EncModeSelectorComponent` (which is explicitly in scope)
+- The "promote instance variable" micro-step in Phase 1 is the only change that touches `APC_64_40_9.py` in a way that could break existing features; doing it first and verifying script load provides an early regression signal
+- There are no workstreams that benefit from parallel execution; each step within each phase depends on the prior
 
 ### Research Flags
 
-Phases with standard patterns (skip research-phase during planning):
+Phases likely needing deeper research during planning:
+- **Phase 1, Step 2:** Verify that two `DeviceComponent` instances targeting the same appointed device simultaneously do not conflict via `_device_bank_registry`. The `EncoderDeviceComponent._alt_device` pattern suggests it works, but confidence is MEDIUM. The verification is empirical — create the instances in Step 2, load the script, change the selected device, confirm both instances receive the update without errors before wiring controls in Step 3.
 
-- **All phases:** The implementation pattern, API, tick rate, and integration points are fully researched against verified source. No additional research phase is needed. Every implementation decision has a verified source and a working example in the existing codebase.
+Phases with standard patterns (skip research-phase):
+- **Phase 2:** The toggle/momentary timer pattern is fully proven in v1.0 (`ToggleMomentaryChannelStripComponent`). The transposition to mode indices in `EncModeSelectorComponent` is mechanical — STACK.md and ARCHITECTURE.md both provide concrete code sketches. No additional research phase needed.
 
 ---
 
@@ -143,20 +133,20 @@ Phases with standard patterns (skip research-phase during planning):
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All APIs verified against decompiled Live 12.1 `_Framework` source. Tick rate confirmed in `Defaults.py`. `_register_timer_callback` confirmed in `ControlSurfaceComponent.py`. Pattern confirmed working in this exact codebase. |
-| Features | MEDIUM | Core behavior semantics verified against multiple sources. 400ms threshold informed by community consensus (300-500ms range), not official documentation. Inversion requirement validated against PROJECT.md. |
-| Architecture | HIGH | Based entirely on direct source analysis of this codebase and Live 12.1 `_Framework`. Component boundary decisions are grounded in observed patterns across 5+ existing components. |
-| Pitfalls | HIGH | Critical pitfalls are derived from Framework source analysis and existing codebase evidence (including a documented pre-existing bug in `StepSequencerComponent`). No pitfall is speculation. |
+| Stack | HIGH | All APIs verified against decompiled `_Framework` source at `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/` (source timestamp 2025-03-17). Direct sequential parameter access via `device.parameters[1:17]` verified against `_Generic/Devices.py`. |
+| Features | HIGH | Grounded entirely in existing codebase analysis. No external domain inference required. v1.0 implementation provides verified behavioral template. |
+| Architecture | HIGH | Component boundaries and data flow verified by reading every file in the change path. One MEDIUM item: dual DeviceComponent on same device needs empirical verification in Step 2 of Phase 1. |
+| Pitfalls | HIGH | Derived from direct reading of the exact code paths that will be modified. v1.0 pitfalls confirmed by the shipped implementation. No pitfall is speculation. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **400ms threshold feel:** Research confirms 400ms is in the correct range for performance controllers, but "correct" here is subjective. The constant is named and isolated; it can be tuned during manual testing without code structure changes. Plan one tuning pass after the feature is wired.
+- **Dual DeviceComponent on same device (architecture risk):** Two `Pan16DeviceComponent` instances both subscribing to the appointed device listener is the core assumption of the 16-param design. The `_device_bank_registry.set_device_bank` interaction is not fully characterized. Mitigation: verify empirically in Phase 1 Step 2 by creating both instances, loading the script in Live, and changing the selected device before any encoder controls are wired. Fail fast before control wiring is added.
 
-- **Exclusive-solo propagation under hold:** Live's exclusive-solo mode fires `_on_solo_changed` on all tracks when one changes. The pre-press state capture strategy (capture at press-down) handles this correctly in theory. Verify empirically during Phase 5 testing — hold a long-press on track 1 while manually soloing track 2 via the GUI.
+- **`_pan_to_vol_ticks_delay` unification:** `EncModeSelectorComponent` has an existing `_pan_to_vol_ticks_delay` mechanism (5-tick countdown, Pan/Vol sub-mode toggle). Phase 2 can either unify this into the new per-button tick array or leave it alongside. Unified is cleaner and avoids two concurrent timer counters in `_on_timer` (Pitfall E4). The decision must be made before writing `_on_timer` changes to avoid rewriting that method twice.
 
-- **`_shift_pressed` access in the new class:** The research identifies that shift handling is wired via `APC_64_40_9.py` using `strip.set_shift_button()`. Confirm that `self._shift_button` (or whatever attribute the parent class uses) is accessible in `ToggleMomentaryChannelStripComponent` before writing the guard in Phase 3.
+- **Send button dual-role clarification:** The FEATURES.md research flag notes that per-track Send A/B/C MIDI note assignments are not explicitly wired in the current script. The ARCHITECTURE.md research confirmed the Send A/B/C buttons (notes 88-90) are global mode selectors only — there are no separate per-track send buttons on the APC40. This interpretation is the basis for the Phase 2 design. Confirm this reading is correct before Phase 2 coding begins by cross-referencing APC40 hardware documentation.
 
 ---
 
@@ -164,27 +154,25 @@ Phases with standard patterns (skip research-phase during planning):
 
 ### Primary (HIGH confidence)
 
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/Defaults.py` — `TIMER_DELAY = 0.1`, `MOMENTARY_DELAY = 0.3` (source timestamp 2025-03-17)
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ControlSurfaceComponent.py` — `_register_timer_callback`, `_unregister_timer_callback`, `_tasks` lazy attribute
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ChannelStripComponent.py` — `_solo_value`, `_mute_value`, `_on_solo_changed`, `_on_mute_changed`
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/MomentaryModeObserver.py` — tick-counting pattern (canonical Framework example)
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ModesComponent.py` — `Task.sequence(Task.wait(...))` alternative pattern
-- `/Users/stoersignal/Dev/APC_64_40_12/SpecialChanStripComponent.py` — existing correct `_register_timer_callback` / `_unregister_timer_callback` pair
-- `/Users/stoersignal/Dev/APC_64_40_12/EncModeSelectorComponent.py` — press-hold mode selection pattern
-- `/Users/stoersignal/Dev/APC_64_40_12/APC_64_40_9.py` lines 134-195 — solo/mute wiring and sequencer button assignment
-- `/Users/stoersignal/Dev/APC_64_40_12/StepSequencerComponent.py` line 84 — pre-existing missing-unregister bug (the negative example)
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/DeviceComponent.py` — `_assign_parameters`, `set_parameter_controls`, bank structure (source timestamp 2025-03-17)
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Generic/Devices.py` — `parameter_banks`, column-major `group()` interleaving confirmed
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/Util.py` — `group(lst, n)` column-major implementation
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ChannelStripComponent.py` — `set_send_controls()` maps encoders to send level only; no built-in send enable button
+- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ControlSurfaceComponent.py` — `_register_timer_callback`, `_unregister_timer_callback`
+- `/Users/stoersignal/Dev/APC_64_40_12/EncModeSelectorComponent.py` — existing `_pan_to_vol_ticks_delay` / `_on_timer` pattern; mode routing; timer already registered
+- `/Users/stoersignal/Dev/APC_64_40_12/ToggleMomentaryChannelStripComponent.py` — v1.0 reference implementation for toggle/momentary timer pattern
+- `/Users/stoersignal/Dev/APC_64_40_12/EncoderDeviceComponent.py` — appointed device listener pattern; `_alt_device` dual-DeviceComponent precedent
+- `/Users/stoersignal/Dev/APC_64_40_12/ShiftableDeviceComponent.py` — shift guard pattern, `ChannelTranslationSelector` usage, bank index management
+- `/Users/stoersignal/Dev/APC_64_40_12/APC_64_40_9.py` — full encoder and mode button wiring, CC assignments, composition layer
+- `/Users/stoersignal/Dev/APC_64_40_12/EncoderUserModesComponent.py` — canonical `release_parameter()` before mode switch pattern
+- `/Users/stoersignal/Dev/APC_64_40_12/ConfigurableButtonElement.py` — deferred listener queue pattern (`_pending_listeners`)
+- `/Users/stoersignal/Dev/APC_64_40_12/ShiftableEncoderSelectorComponent.py` — shift toggle re-routing of encoder bank buttons
+- `.planning/codebase/CONCERNS.md` — existing timer cleanup gap in `StepSequencerComponent`; confirms Pitfall 2 is a real risk in this codebase
 
 ### Secondary (MEDIUM confidence)
 
-- Ableton official: Toggle vs Momentary MIDI functions — https://help.ableton.com/hc/en-us/articles/209774945-Toggle-and-Momentary-MIDI-functions
-- DJ TechTools: Momentary FX in Ableton Live — inversion pattern — https://djtechtools.com/2012/08/19/momentary-fx-in-ableton-live-advanced-midi-mappings/
-- Ableton Forum: Python API timer callbacks at ~100ms resolution — https://forum.ableton.com/viewtopic.php?t=179893
-- Mixxx community: Long/short/double press code snippet patterns — https://mixxx.org/forums/viewtopic.php?f=7&t=7681
-- BeepStreet forums: Long press vs double-tap latency tradeoff — https://forum.beepstreet.com/discussion/1574/double-tap-and-long-press-midi-map-learn-actions
-
-### Tertiary (LOW confidence)
-
-- Avid VENUE Manual (momentary solo threshold = 1 second) — https://www.manualslib.com/manual/678243/Avid-Technology-Venue.html?page=130 (page partially inaccessible; used only for context on industry norms, not for implementation decisions)
+- [Ableton Live 11 MIDIRemoteScripts — DeviceComponent.py](https://github.com/gluon/AbletonLive11_MIDIRemoteScripts/blob/master/_Framework/DeviceComponent.py) — bank structure confirmed in Live 11 source; API confirmed stable through Live 12
+- [Ableton Live 11 MIDIRemoteScripts — _Generic/Devices.py](https://github.com/gluon/AbletonLive11_MIDIRemoteScripts/blob/master/_Generic/Devices.py) — `number_of_parameter_banks`, 8-parameter bank structure confirmed
 
 ---
 

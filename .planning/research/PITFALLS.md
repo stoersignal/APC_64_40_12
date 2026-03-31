@@ -2,271 +2,386 @@
 
 **Domain:** MIDI control surface script — press-duration detection, state management, LED feedback
 **Project:** APC40 Toggle/Momentary Button Behavior
+**Milestone:** v1.1 16Macros (16-parameter encoder mapping + toggle/momentary Send A/B/C)
 **Researched:** 2026-03-31
-**Overall confidence:** HIGH — verified against _Framework source at `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/` and existing codebase patterns in this project
+**Overall confidence:** HIGH — derived from direct codebase analysis and verified framework source patterns
 
 ---
 
-## Critical Pitfalls
+## Scope of This File
 
-Mistakes that cause incorrect behavior, hard-to-reproduce bugs, or silent regressions.
+Pitfalls are organized into two sections:
+
+1. **v1.0 pitfalls (Solo/Mute)** — carried forward from the initial research, still valid as regression risks
+2. **v1.1 pitfalls (16Macros)** — new pitfalls specific to: (a) 16-parameter encoder mapping via Pan mode, and (b) toggle/momentary Send A/B/C buttons
+
+---
+
+## Part 1: v1.1 Critical Pitfalls — 16-Parameter Encoder Mapping
+
+---
+
+### Pitfall E1: Dual-Assignment of `_global_param_controls` Without Proper Handoff
+
+**What goes wrong:** The 8 global track encoders (`_global_param_controls`, CC 48-55, channel 0) are already assigned to `EncModeSelectorComponent` as well as to `EncoderDeviceComponent` and `EncoderEQComponent` via `EncoderUserModesComponent`. Adding a second set of 8 encoder assignments (the device encoders, CC 16-23) to the same Pan mode without cleanly releasing the encoders from their current owners causes both assignments to fire simultaneously.
+
+**Why it happens:** `EncModeSelectorComponent.update()` calls `self._mixer.channel_strip(index).set_pan_control(self._controls[index])` and `set_send_controls(...)` for mode_index 0. If `device_param_controls` (CC 16-23) are also connected to a `DeviceComponent` via `ShiftableDeviceComponent`, they remain mapped to device parameters. The two mappings coexist silently — the encoder sends its MIDI value to both the pan parameter and the device parameter simultaneously.
+
+**Consequences:**
+- Moving an encoder in Pan mode accidentally changes a device parameter
+- Device parameter mapping drifts without user intent
+- Extremely hard to debug because both effects happen at the same MIDI value arrival
+
+**Prevention:** Before assigning `device_param_controls` to a new device mapping in Pan mode, call `release_parameter()` on each control. Follow the pattern in `EncoderUserModesComponent._set_modes()` (lines 116-118): iterate `_param_controls` and call `control.release_parameter()` before reassigning. The mode that "takes over" the encoders owns the release responsibility.
+
+**Detection (warning signs):**
+- Moving a top encoder in Pan mode causes a visible change in the device's parameter display in Ableton's Device View
+- `ShiftableDeviceComponent.update()` is observed to call `_assign_parameters()` after a mode switch to Pan
+- Two separate `connect_to()` calls on the same encoder without an intervening `release_parameter()`
+
+**Phase:** Phase 1 — encoder mapping implementation
+
+---
+
+### Pitfall E2: `EncModeSelectorComponent.update()` Only Iterates 8 Strips — Mismatch With 16-Parameter Intent
+
+**What goes wrong:** The current `EncModeSelectorComponent.update()` iterates `range(len(self._controls))` which is 8 (the global track encoders). When Pan mode is extended to also map the 8 device encoders to parameters 9-16, a naive approach passes the combined 16 controls as `self._controls`. This breaks the assertion `len(controls) == 8` in `set_controls()` (line 52) and also breaks the inner loop that maps `self._controls[index]` to `channel_strip(index)` — there are only 8 visible channel strips but 16 controls.
+
+**Why it happens:** The architecture of `EncModeSelectorComponent` assumes a 1:1 relationship between encoder index and channel strip index. Extending to 16 parameters requires a different mental model: the top 8 encoders still map to channel strips (as pan or send), but the bottom 8 encoders map to device parameters 9-16 of the *selected device*, not to additional channel strips.
+
+**Consequences:**
+- If `set_controls()` is naively called with a 16-element tuple, the assertion fails and the mode selector crashes on component load
+- If the loop is extended to 16 without restricting to available channel strips, `self._mixer.channel_strip(index)` at index 8-15 will throw an IndexError or return `None`
+- Misassigned parameter targets: encoders 9-16 need a device parameter path, not a mixer strip path
+
+**Prevention:** Keep `EncModeSelectorComponent` handling the first 8 encoders to channel strip pan/sends as it does now. Add a separate, dedicated component (or extend `ShiftableDeviceComponent`) to handle the device encoders' parameter 9-16 mapping in Pan mode. The two halves are fundamentally different: mixer strips vs. device parameters.
+
+**Detection (warning signs):**
+- Any modification that changes the `len(controls) == 8` assertion in `EncModeSelectorComponent.set_controls()`
+- A call to `self._mixer.channel_strip(index)` with `index >= 8`
+- A `set_controls()` call passing a 16-element tuple to `EncModeSelectorComponent`
+
+**Phase:** Phase 1 — architecture decision before implementation begins
+
+---
+
+### Pitfall E3: Encoder Parameter Release Not Called on Mode Exit
+
+**What goes wrong:** When leaving Pan mode (switching to Send A, Send B, Send C, or any shift-based mode), the device encoders (CC 16-23) are not released from their parameter 9-16 connections before being reassigned. They carry their previous mapping into the new mode.
+
+**Why it happens:** `EncModeSelectorComponent.update()` currently reassigns the top 8 encoders when mode changes, but does not handle a "second row" of device encoders. When mode switches away from Pan, the device encoder bindings are never cleared because no code owns that cleanup.
+
+**Consequences:**
+- Device parameter 9-16 continues changing when user moves the device encoders in Send mode
+- The physical encoder LED rings (RingedEncoderElement) show stale parameter position until the parameter is released
+- `release_parameter()` for the device encoders is never called, leaving parameters in a "controlled" state that prevents them from being connected to other targets
+
+**Prevention:** In whatever component or method establishes the Pan-mode device parameter mapping, pair every `connect_to()` call with a corresponding `release_parameter()` call in the mode teardown path. Model on `EncoderUserModesComponent._set_modes()` lines 126-128 which explicitly releases `_parameter_controls` before disabling `_encoder_device_modes`.
+
+**Detection (warning signs):**
+- After switching from Pan mode to Send A mode, the device encoders still visually track device parameter changes
+- `RingedEncoderElement` LED ring shows a value different from the current pan/send level after mode switch
+- No `release_parameter()` call paired with the Pan-mode `connect_to()` in the mode teardown path
+
+**Phase:** Phase 1 — must be addressed in the same implementation task as parameter assignment
+
+---
+
+### Pitfall E4: `PAN_TO_VOL_DELAY` Timer in `EncModeSelectorComponent` Conflicts With New Timer
+
+**What goes wrong:** `EncModeSelectorComponent` already uses `_register_timer_callback(self._on_timer)` and manages `_pan_to_vol_ticks_delay` in its `_on_timer`. If the 16-parameter Pan mode implementation adds its own timer logic into the same component (e.g., for a "hold Pan button to activate 16-param mode" behavior), the two timer counters interact and the `_on_timer` method becomes difficult to reason about. In the worst case, a new counter is added that is never reset, causing `_on_timer` to perpetually run its logic.
+
+**Why it happens:** `EncModeSelectorComponent._on_timer()` is already the only timer in this component. It is tempting to add more countdown logic there. But the `PAN_TO_VOL_DELAY` counter is already a timer-within-a-timer pattern (5 ticks for pan-to-vol toggle). Adding a second counter creates two independent state machines in one timer method.
+
+**Consequences:**
+- If the new counter is not reset to `-1` after its action fires, `_on_timer` runs every 100ms performing a no-op check indefinitely
+- The `_pan_to_vol_ticks_delay` counter and the new counter may fire in the same tick, with both performing conflicting mode updates
+- Cascading `update()` calls in the same timer tick may send contradictory LED states to the hardware
+
+**Prevention:** If a new timer-based behavior is needed for the 16-parameter mode, manage it in a separate component. Keep `EncModeSelectorComponent._on_timer()` responsible only for `_pan_to_vol_ticks_delay`. Follow single-responsibility: one component, one timer, one concern.
+
+**Detection (warning signs):**
+- More than one `*_ticks_delay` instance variable in `EncModeSelectorComponent`
+- `_on_timer` in `EncModeSelectorComponent` performing two unrelated countdown actions in the same method
+- `update()` called twice in the same timer tick via different timer branches
+
+**Phase:** Phase 1 — architectural decision, establish before any timer additions
+
+---
+
+### Pitfall E5: Device Encoder Bank State Not Preserved Across Mode Switches
+
+**What goes wrong:** `ShiftableDeviceComponent` tracks `_bank_index` (which group of 8 parameters is displayed). When Pan mode maps device encoders to parameters 9-16 (bank 1), the bank index changes. When the user switches to a different encoder mode and back, the bank index is not restored to 1 and the encoders revert to parameters 1-8.
+
+**Why it happens:** `ShiftableDeviceComponent.set_device()` calls `self._control_translation_selector.set_mode(self._bank_index)`, and `update()` calls `_assign_parameters()`. Neither of these remembers that "in Pan mode, the device encoders should be pinned to bank 1." The bank is freely switchable via shift + bank buttons.
+
+**Consequences:**
+- User switches to device mode and back to Pan mode — device encoders now show parameters 1-8 again
+- The 16-parameter mapping appears to "reset" randomly during a performance session
+- Shift + device bank buttons (CC 58-65) still change the bank while the device encoders are supposed to be locked to params 9-16 in Pan mode
+
+**Prevention:** Pan mode's device encoder assignment must explicitly force bank_index to 1 and prevent shift-bank switching from changing it while Pan mode is active. This requires either disabling the bank buttons in Pan mode or adding a "mode-active" guard in `_bank_value`. Document the locking behavior clearly.
+
+**Detection (warning signs):**
+- After navigating to device bank 0 and back to Pan mode, device encoders respond to parameters 1-8
+- Shift + bank button while in Pan mode changes which parameters the device encoders control
+- No explicit `set_mode(1)` or equivalent bank-lock call in the Pan mode activation path
+
+**Phase:** Phase 1 — must be considered at design time
+
+---
+
+## Part 2: v1.1 Critical Pitfalls — Toggle/Momentary Send A/B/C Buttons
+
+---
+
+### Pitfall S1: Send A/B/C Buttons Have Dual Physical Roles — Mode Selector AND Per-Track Send
+
+**What goes wrong:** The Pan/Send A/Send B/Send C buttons (MIDI notes 87-90, channel 0) are `ConfigurableButtonElement` instances stored as `_global_bank_buttons`. They are currently wired as mode buttons to both `EncModeSelectorComponent` (via `set_modes_buttons`) and `ChannelTranslationSelector` (via `set_mode_buttons`) and `EncoderUserModesComponent` (via `set_mode_buttons`). Adding toggle/momentary send enable to these same physical buttons means a single button press now has two interpretations: change the global encoder mode AND toggle/momentarily activate the per-track send.
+
+**Why it happens:** The APC40 has a fixed button layout. The Send A/B/C buttons are the only dedicated per-track send controls on the hardware. They must serve both as the "which send do the encoders control" mode selector and as the "enable this send on this track" toggle. Without explicit coordination, pressing Send A causes `EncModeSelectorComponent._mode_value` to fire (switching all encoders to Send A), and simultaneously it should trigger the per-track toggle/momentary on the selected track.
+
+**Consequences:**
+- Every short press of Send A both (1) switches encoder mode to Send A AND (2) toggles the send on the selected track — these may conflict or produce confusing behavior
+- Long press acting as momentary send: the encoder mode has already switched at press-down, but on release the momentary reverts the send — the user sees encoder mode change without the send staying on
+- The `EncModeSelectorComponent` is enabled only when `ShiftableEncoderSelectorComponent` is in the non-shift mode. The toggle/momentary behavior needs to know whether the button is acting as a mode button or as a send toggle at any given moment
+
+**Prevention:** Decide the disambiguation rule before implementation: does the toggle/momentary apply to the *selected* track's send level (the channel strip that the encoder mode selector would control), or does it apply to the track beneath the encoder? Confirm with the design whether pressing Send A always means "toggle this send on the focused/selected track" regardless of what the encoder does. If so, the toggle/momentary behavior belongs on the same component that receives the button's value and can run independently of the encoder mode path.
+
+**Detection (warning signs):**
+- No disambiguation logic in the value handler for "is this press a mode switch or a send toggle?"
+- Pressing Send A while in shift mode (where encoder mode buttons are re-routed by `ShiftableEncoderSelectorComponent`) causes unexpected toggle behavior on the selected track
+- The encoder mode changes at press-down but the send momentary reverts it on release
+
+**Phase:** Phase 2 — Send button behavior; requires explicit design decision before coding
+
+---
+
+### Pitfall S2: `ChannelStripComponent` Has No `set_send_enable_button` — Send On/Off Is on the Track Object
+
+**What goes wrong:** The existing toggle/momentary implementation (`ToggleMomentaryChannelStripComponent`) works on `track.solo` and `track.mute` because these are direct writable attributes on `Live.Track.Track`. Per-track send enable is different: it is `track.mixer_device.sends[n].enabled` — a property on the `AutomationLane` or `SendAmount` object within the mixer device. There is no `_send_value` method in `ChannelStripComponent` that maps to send enable in the same way `_solo_value` maps to track.solo.
+
+**Why it happens:** Ableton's `ChannelStripComponent` provides `set_send_controls()` which maps an encoder to the send *level* (volume), not the send *enable state*. The framework has no built-in concept of a "send enable button" — that is a custom behavior.
+
+**Consequences:**
+- Attempting to use `getattr(self._track, 'send_a')` will fail with AttributeError — this attribute does not exist on `Live.Track.Track`
+- The `_handle_toggle_momentary` helper from v1.0 cannot be reused without modification — it assumes the target attribute is on `self._track` directly
+- The sends list may be empty (no sends configured in the Live set) — accessing `sends[0]` raises IndexError
+
+**Prevention:** Before implementation, verify the Live API path: `self._track.mixer_device.sends[send_index]` returns a `MixerDevice.Send` object with an `enabled` attribute. Guard against empty sends list. The revert logic must also target `sends[n].enabled`, not a top-level track attribute. Write a helper that accepts `send_index` and handles the nested attribute path safely.
+
+**Detection (warning signs):**
+- Any use of `getattr(self._track, 'send_a')` or similar direct attribute access
+- No guard for `len(self._track.mixer_device.sends) > send_index` before accessing the send
+- The `_handle_toggle_momentary` helper called with `track_attr='sends[0]'` — `getattr`/`setattr` do not support subscript notation
+
+**Phase:** Phase 2 — verify API path in Phase 1's research task before writing any code
+
+---
+
+### Pitfall S3: Send Index Mismatch Between Encoder Mode and Send Toggle
+
+**What goes wrong:** The `EncModeSelectorComponent` uses mode_index 1/2/3 for Send A/B/C (0 = Pan). The send toggle on the channel strip needs to know which send index (0, 1, 2) to toggle. If the toggle always uses a hardcoded send index regardless of which button was pressed, pressing Send B toggles the wrong send (e.g., always send index 0 instead of send index 1).
+
+**Why it happens:** The encoder mode and the per-track send toggle are separate code paths. The mode index is tracked in `EncModeSelectorComponent._mode_index`. The channel strip component does not have visibility into this mode index. Without explicit coordination, the strip has no way to know "which send button was just pressed."
+
+**Consequences:**
+- Pressing Send B toggles Send A on the track (index off by one or hardcoded)
+- After switching from Send B mode to Send C mode, the toggle still affects Send B
+- All three send buttons appear to toggle the same send
+
+**Prevention:** Design the per-track send toggle to receive the send index at call time, not to derive it from a global mode. If the toggle/momentary behavior is implemented in the channel strip, the strip needs either a `set_active_send_index(n)` setter (called when mode changes) or the toggle logic should be invoked directly from the mode selector component with the send index as a parameter. The cleanest path: the toggle/momentary for sends belongs on the component that owns the mode decision (either `EncModeSelectorComponent` or a wrapper), not on the channel strip.
+
+**Detection (warning signs):**
+- A hardcoded send index in the send toggle handler (e.g., `self._track.mixer_device.sends[0].enabled`)
+- No communication path from `EncModeSelectorComponent` to the strip about which send index is active
+- Pressing Send B showing LED feedback for Send A on the track
+
+**Phase:** Phase 2 — architecture issue, must be resolved in design before code
+
+---
+
+### Pitfall S4: LED State for Send Enable Requires Manual Management
+
+**What goes wrong:** For Solo and Mute, the framework's `ChannelStripComponent` automatically updates the button LED via `_on_solo_changed` and `_on_mute_changed` listeners. No equivalent framework listener exists for per-track send enable. If the send enable LED is not manually updated after each toggle or momentary revert, it will stay in the wrong state.
+
+**Why it happens:** `ChannelStripComponent` registers listeners for track attributes it manages. Send enable is not a managed attribute in the stock framework — the framework only manages send *level* via encoders. Therefore the LED update path for send enable must be written from scratch.
+
+**Consequences:**
+- After toggling send enable, the Send button LED does not change — the button appears dead
+- After a momentary revert on release, the LED stays lit even though the send was re-disabled
+- Track state and LED state diverge permanently after the first toggle
+
+**Prevention:** After every write to `sends[n].enabled`, explicitly update the button LED: call `self._send_button.turn_on()` or `turn_off()` based on the new value. Also register a `sends[n].add_enabled_listener(callback)` to update the LED if the send state changes through other paths (automation, GUI). Remove this listener in `disconnect()` and when the track changes.
+
+**Detection (warning signs):**
+- No `add_enabled_listener` call for the send enable attribute
+- Send button LED does not reflect live send state when another controller or the GUI changes send enable
+- No `turn_on()` / `turn_off()` call in the toggle/momentary handler for the send button
+
+**Phase:** Phase 2 — LED management is a required part of the feature, not an enhancement
+
+---
+
+### Pitfall S5: Shift Guard Broken Because Send Buttons Already Have Shift-Modified Behavior
+
+**What goes wrong:** In v1.0, the shift guard in `_solo_value` / `_mute_value` (`if self._shift_pressed: return`) prevents toggle/momentary behavior when shift is held. The Send A/B/C buttons in shift mode are re-routed by `ShiftableEncoderSelectorComponent._toggle_value()` — shift hold causes `ShiftableEncoderSelectorComponent` to call `update()` which reassigns the buttons to `EncModeSelectorComponent`. This means shift + Send A fires two handlers: the shift toggle handler (which re-routes encoder modes) AND potentially the send toggle handler (which would try to toggle the send while shift is held).
+
+**Why it happens:** `ShiftableEncoderSelectorComponent._toggle_value()` at line 80-101 of `ShiftableEncoderSelectorComponent.py` handles the shift press and fires `_recalculate_mode()`. The send toggle handler would also fire because the same button element fires all registered listeners. Unless there is a shared `_shift_pressed` state that the send toggle handler can check, it cannot distinguish "shift + Send A" from a plain "Send A".
+
+**Consequences:**
+- Shift + Send A (which should only change encoder mode routing) accidentally toggles the per-track send enable
+- A track send gets toggled during the button remapping at shift press time
+- Shift release triggers a momentary revert for a send that was never intentionally activated
+
+**Prevention:** The send toggle handler must check `_shift_pressed` before acting — same as the Solo/Mute handlers. The `_shift_pressed` flag must be accessible from wherever the send toggle handler lives. If the handler is on the channel strip, the strip must have `set_shift_button()` wired to the same shift button as the rest of the system (pattern already established at `APC_64_40_9.py` line 159).
+
+**Detection (warning signs):**
+- No `_shift_pressed` check at the top of the send toggle value handler
+- Track sends toggling when shift is pressed
+- The `set_shift_button()` setter is not called on the component that handles send toggles during `_setup_mixer_control()`
+
+**Phase:** Phase 2 — must be in the initial implementation, same lesson as Pitfall 5 (v1.0)
+
+---
+
+### Pitfall S6: Momentary Revert Race With EncModeSelectorComponent Mode Change
+
+**What goes wrong:** On a long press of Send B: (1) press-down fires, send B enable toggles immediately, mode switches to Send B, timer starts; (2) user holds; (3) user releases — the momentary revert fires to restore send B enable. But simultaneously, the mode does not change back on release (the mode stays at Send B because `EncModeSelectorComponent` uses non-momentary mode buttons). The send reverted but the mode did not — the UI shows "Send B mode" but the send is now disabled on that track.
+
+**Why it happens:** Encoder mode selection (which set of parameters the encoders control) is a persistent latch: pressing Send B mode stays in Send B mode until another button is pressed. Send toggle/momentary, by contrast, is transient. The two behaviors have asymmetric release semantics.
+
+**Consequences:**
+- After a momentary hold of Send B, the track's send B is off but the encoders are controlling send B levels — the encoder controls a parameter that appears inactive
+- Users who intended to "hold Send B to temporarily enable it" find it still disabled after release
+- LED state shows Send B mode active (encoder mode LED) but send enable LED shows off
+
+**Prevention:** Decide whether the momentary behavior applies to (a) the per-track send *enable* (on/off toggle), (b) the encoder mode assignment (Pan/Send A/B/C), or both. These are two separate concepts mapped to the same physical button. The design must specify clearly: does a long press of Send B momentarily turn on the Send B send for the selected track while Send B mode is active, or does it temporarily switch encoder mode to Send B? If both, define their interaction explicitly.
+
+**Detection (warning signs):**
+- No explicit statement in the design about what "momentary Send B" means
+- After release, encoder mode and send enable state are inconsistent
+- LED ambiguity: the mode button and the track send indicator conflict
+
+**Phase:** Phase 2 — design clarification required before any code is written
+
+---
+
+## Part 3: Moderate Pitfalls
+
+---
+
+### Pitfall M1: `SpecialChanStripComponent.set_send_controls()` Calls `update()` — Triggers Full Strip Repaint
+
+**What goes wrong:** `SpecialChanStripComponent.set_send_controls()` (line 22-26) calls `self.update()` whenever controls change. If Pan mode's implementation calls `set_send_controls(None, None, None)` on all 8 strips during mode teardown, then immediately calls `set_pan_control(control)` on each strip, 16 `update()` calls fire in a single mode switch. Each `update()` triggers LED and parameter state refreshes on all controls. This is a performance hit and may produce visible LED flicker.
+
+**Why it happens:** The current mode 0 (Pan) path in `EncModeSelectorComponent.update()` already calls `set_pan_control()` and `set_send_controls()` on all 8 strips in a loop. Extending to 16 parameters adds more iteration without batching.
+
+**Prevention:** Accept this as a known behavior of the existing architecture. Do not add additional unnecessary `set_send_controls()` / `set_pan_control()` calls beyond what the current loop already does. If flicker is observable, suppress LED updates during the mode transition by using `_suppress_send_midi` or batching all changes within a single `with self.component_guard():` block.
+
+**Phase:** Phase 1 — awareness; Phase 2 if optimization is needed
+
+---
+
+### Pitfall M2: `ConfigurableButtonElement._pending_listeners` May Delay Send Toggle Registration
+
+**What goes wrong:** `ConfigurableButtonElement.add_value_listener()` (line 45-49) defers listener registration if the button is notifying. If a send toggle handler is added while the button is in a notification cycle (e.g., during mode switch handling), the handler ends up in `_pending_listeners` and fires on the next notification rather than the current one. This means the send toggle handler may respond to the button press that followed the one that triggered registration.
+
+**Why it happens:** This deferred listener pattern exists to prevent re-entrant listener modifications during notification. It is a correctness mechanism in `ConfigurableButtonElement`, which is the button type used for all global bank buttons (Send A/B/C). Adding listeners from within a value handler (e.g., enabling a component from within `EncModeSelectorComponent._mode_value`) triggers this deferred path.
+
+**Prevention:** Do not add send toggle listeners from inside an active value listener of the same button. Set up listeners during initialization, before any MIDI arrives. If listeners need to be conditionally added based on mode, use `set_enabled(True/False)` on the component rather than adding/removing listeners dynamically.
+
+**Detection (warning signs):**
+- The first Send B press does nothing; the second press triggers the toggle (one-press delay)
+- `add_value_listener` for the send toggle handler called inside another value handler for the same button
+
+**Phase:** Phase 2
+
+---
+
+### Pitfall M3: Sends List May Be Empty or Shorter Than Expected
+
+**What goes wrong:** `track.mixer_device.sends` is a list that varies in length depending on how many return tracks exist in the Live set. A set with no return tracks has an empty sends list. A set with one return track has sends of length 1. Accessing `sends[1]` or `sends[2]` for Send B or Send C control on a track in a minimal set causes IndexError.
+
+**Why it happens:** The framework's `set_send_controls()` handles this gracefully by silently no-oping when the send index exceeds the list length. Direct attribute access (`track.mixer_device.sends[n].enabled`) does not share this safety.
+
+**Prevention:** Guard every send access: `if len(self._track.mixer_device.sends) > send_index`. When the send does not exist, treat as a no-op: do not toggle, do not show LED, do not start the timer.
+
+**Detection (warning signs):**
+- IndexError in Live's Log.txt when pressing Send B or Send C on a track in a set with fewer than 2 or 3 return tracks
+- No guard for `len(sends)` before accessing `sends[n]`
+
+**Phase:** Phase 2
+
+---
+
+### Pitfall M4: Timer Leak If `_send_ticks_delay` Not Cleaned Up on Track Change
+
+**What goes wrong:** v1.0's `ToggleMomentaryChannelStripComponent` correctly cleans up `_solo_ticks_delay` and `_mute_ticks_delay` in `set_solo_button()` and `set_mute_button()`. If send toggle timer variables are added, they must also be cleaned up when the track changes (i.e., when the channel strip is reassigned to a different track via `set_track()`). If not, the timer may fire for the wrong track.
+
+**Why it happens:** `ChannelStripComponent.set_track()` changes `self._track` but does not reset custom state variables. Only the variables that belong to stock framework behaviors are handled by the parent. Custom `_send_ticks_delay` variables are invisible to the parent class.
+
+**Prevention:** Override `set_track()` in the send toggle component and reset all active timer state before calling the parent. Pattern: check if a momentary is active, revert it on the old track, reset all delay counters, then call `SpecialChanStripComponent.set_track(self, track)`.
+
+**Detection (warning signs):**
+- After Ableton's track bank scrolls and reassigns strips to new tracks, the next timer tick fires a momentary revert on the new track (which was never pressed)
+- `set_track()` is not overridden in the send toggle component
+
+**Phase:** Phase 2
+
+---
+
+## Part 4: v1.0 Pitfalls (Carried Forward — Still Relevant as Regression Risks)
+
+These pitfalls were identified for the Solo/Mute toggle/momentary work. They remain valid because the v1.1 Send toggle/momentary work follows the same pattern and can reproduce the same mistakes.
 
 ---
 
 ### Pitfall 1: Activating State at the Threshold Instead of at Press-Down
 
-**What goes wrong:** Implementation waits until the 400ms threshold fires before applying any state change. The button feels unresponsive — the action happens 400ms late, every time. Both short and long presses feel delayed.
+Apply state change immediately on press-down (`value != 0`). The timer only marks "threshold crossed." See v1.0 implementation in `ToggleMomentaryChannelStripComponent._handle_toggle_momentary()` — the state change is in the `if value != 0` branch, the timer starts in the same branch.
 
-**Why it happens:** It seems "clean" to wait until classification is complete before acting. But press-duration classification and state activation are separate concerns. The framework convention (confirmed in `_Framework/MomentaryModeObserver.py` and `_Framework/ModesComponent.py`) is always to act immediately on press and classify on release or after threshold — not the reverse.
-
-**Consequences:**
-- 400ms of perceived latency on every button press
-- Long presses feel sluggish (the visual response should be instantaneous)
-- Short press toggle also loses its immediacy
-
-**Prevention:** Apply the state change immediately on press-down (`value != 0`). Start the timer at the same moment. The timer's role is only to mark "this press has now crossed the threshold" — not to trigger the action. The action already happened.
-
-**Detection (warning signs):**
-- During testing, pressing a button and counting "one Mississippi" before seeing the LED respond
-- Logic that sets `track.solo = True` or `track.mute = True` inside `_on_timer` rather than in the value handler's `value != 0` branch
-
-**Phase:** Core implementation (the single implementation phase for this milestone)
+**Phase:** Phase 2 — send toggle implementation
 
 ---
 
 ### Pitfall 2: Forgetting to Unregister the Timer Callback in `disconnect()`
 
-**What goes wrong:** `_register_timer_callback` is called in `__init__` but the corresponding `_unregister_timer_callback` is not called in `disconnect()`. The timer continues firing after the component is destroyed. It may reference now-invalid track objects or a `None` internal state.
+Every `_register_timer_callback` must have a paired `_unregister_timer_callback` in `disconnect()`. The v1.0 implementation correctly places this in `SpecialChanStripComponent.disconnect()` (line 19). Any new component managing send timers must follow the same pattern.
 
-**Why it happens:** This is the exact bug already present in `StepSequencerComponent` (documented in `CONCERNS.md` — "Missing Timer Cleanup", line 84 registers `_on_timer`, `disconnect` does not show unregistration). It is easy to forget because Python does not warn about this — the callback just keeps running silently.
-
-**Consequences:**
-- Memory leak
-- `_on_timer` fires and attempts to access `self._track`, which may be `None` after disconnect
-- Phantom state updates — long-press state machine continues ticking after the script is no longer active
-- AttributeError exceptions in the Live log after controller disconnects, making debugging difficult
-
-**Prevention:** The pattern in `SpecialChanStripComponent` is correct — it pairs `_register_timer_callback` in `__init__` (line 16) with `_unregister_timer_callback` in `disconnect()` (line 19). Reproduce this pattern exactly. Never add a `_register_timer_callback` call without immediately writing its `_unregister_timer_callback` counterpart in `disconnect()`.
-
-**Detection (warning signs):**
-- Searching for `_register_timer_callback` in the modified file and not finding an equal number of `_unregister_timer_callback` calls
-- Errors in Live's log file (`Log.txt`) after controller reconnect containing the timer callback's function name
-- Ableton Live becoming slightly slower over repeated reconnects of the controller (timer firing rate increases)
-
-**Phase:** Core implementation — must be in the initial implementation, not added later
+**Phase:** Phase 2 — any new component that uses a timer
 
 ---
 
-### Pitfall 3: Overriding `_on_solo_changed` / `_on_mute_changed` Instead of the Value Handler
+### Pitfall 3: Using Wrong Override Point (`_on_send_changed` vs. value handler)
 
-**What goes wrong:** Logic for toggle/momentary is placed in `_on_solo_changed` (the listener that fires when `track.solo` changes) instead of in `_solo_value` (the handler that fires when the physical button is pressed). This causes the logic to run on every external change to solo state, not just button presses.
+Send level changes fire framework callbacks. Per-send enable changes are not tracked by the framework. The send toggle logic belongs in the button's value handler, not in any change listener. There is no `_on_send_enabled_changed` in the framework — this must be registered manually as noted in Pitfall S4.
 
-**Why it happens:** `_on_solo_changed` and `_solo_value` have similar-sounding names. When reading `ChannelStripComponent.py`, a developer might confuse the two. `_on_solo_changed` fires when Ableton internally changes the track's solo state (e.g., via the GUI, via another controller, or via the script itself). `_solo_value` fires when MIDI value 127 or 0 arrives from the hardware button.
-
-**Consequences:**
-- The momentary/toggle logic runs twice per press (once when value arrives, once when track state propagates back through the listener)
-- The logic also runs when other things change the solo state (automating solo, clicking in the GUI, CLIP launch scenes that affect solo), causing the state machine to fire unexpectedly
-- Revert logic may undo external changes — if the user clicks solo in the Ableton GUI while the button has been pressed before, the release handler may revert that too
-
-**Prevention:** The press-duration logic belongs in `_solo_value` / `_mute_value`. These are the correct override points. `_on_solo_changed` / `_on_mute_changed` exist solely to update LEDs and should be left alone unless LED behavior needs to change (which it does not — the existing automatic LED update path already works correctly).
-
-**Detection (warning signs):**
-- Any press-duration timer state variables being set inside `_on_solo_changed` or `_on_mute_changed`
-- Momentary revert triggering unexpectedly when another track's solo changes (because exclusive-solo mode in Live fires `_on_solo_changed` on all tracks when one changes)
-- Logic that reads `value` inside `_on_solo_changed` — this method receives no `value` argument; it reads `self._track.solo` directly
-
-**Phase:** Core implementation
+**Phase:** Phase 2
 
 ---
 
-### Pitfall 4: Pre-Press State Not Captured at Button-Down
+### Pitfall 4: Pre-Press State Captured at Release Instead of Press-Down
 
-**What goes wrong:** The pre-press track state (what solo/mute was before the press) is captured at release time instead of at press-down time. If any intermediate event changes the track state while the button is held (automation, scene launch, another controller, exclusive-solo propagation), the release handler reverts to the wrong state.
+Store `sends[n].enabled` at press-down time. Use that stored value for the momentary revert at release. Do not re-read the live attribute at release time.
 
-**Why it happens:** "Capture state when I need it" (lazy capture) feels natural. The revert happens at release time, so it seems natural to read the current state at release time. But the "pre-press state" is a snapshot of the moment just before the button changed anything — that moment is press-down.
-
-**Consequences:**
-- Long-pressing solo on an unsoloed track, having a scene launch that solos another track (and unsoles everything else) during the hold, then releasing — the handler may incorrectly try to revert to a state that has already been changed by the scene launch
-- Subtle, non-deterministic behavior that is hard to reproduce in testing but happens in live performance
-
-**Prevention:** On button-down (`value != 0`), immediately read and store `self._track.solo` (for solo buttons) or `self._track.mute` (for mute buttons) into an instance variable (e.g., `self._solo_state_before_press`). Use this stored value at release time for the revert decision, not a fresh read.
-
-**Detection (warning signs):**
-- Instance variable for "pre-press state" being set in the release branch (`value == 0`) of the value handler
-- Reading `self._track.solo` at release time to decide what state to restore
-- Tests that involve external state changes during a hold failing unexpectedly
-
-**Phase:** Core implementation
+**Phase:** Phase 2
 
 ---
 
-### Pitfall 5: Shift-Modified Solo/Mute Behavior Broken by New Value Handler
+### Pitfall 5: Shift Guard Missing — Breaking Other Button Functions
 
-**What goes wrong:** The existing `_solo_value` and `_mute_value` override logic in `SpecialChanStripComponent` (or its parent `ChannelStripComponent`) already has a shift-button check. A new override that does not preserve this check breaks `shift + solo` and `shift + mute` functionality.
+Applies to sends: Send A/B/C buttons in shift mode are re-routed by `ShiftableEncoderSelectorComponent`. The send toggle handler must check `_shift_pressed` first. See Pitfall S5 for the specific interaction.
 
-**Why it happens:** When overriding `_solo_value`, developers read only the parent class signature and forget to inspect the existing logic for shift handling. In this codebase, `ChannelStripComponent._solo_value` does not natively handle shift — the shift handling is added at the component level (via `strip.set_shift_button(self._shift_button)` in `APC_64_40_9.py` line 159). Looking at `SpecialChanStripComponent`, the `_select_value` method already shows the shift pattern (`self._select_button.is_momentary()`), which is the model to follow.
-
-**Consequences:**
-- Shift + Solo no longer performs its existing function (which in this script provides sequencer loop-length page control when the sequencer is active — `self._sequencer.set_loop_length_buttons(tuple(solo_buttons))` at `APC_64_40_9.py` line 191)
-- Regression is invisible during simple testing but fails in any session that uses the step sequencer
-
-**Prevention:** At the start of any new `_solo_value` / `_mute_value` override, check whether `_shift_pressed` is True and return early (or call through to existing behavior). Review `APC_64_40_9.py` lines 188-192 to understand that solo and mute buttons are also wired to the sequencer as `set_loop_length_buttons` and `set_loop_start_buttons`. The press-duration logic must only activate when shift is NOT pressed.
-
-**Detection (warning signs):**
-- Not having a `_shift_pressed` guard at the top of the new `_solo_value` / `_mute_value` implementation
-- Step sequencer loop-length paging stops working after the change
-- Integration testing that exercises shift + solo returns unexpected results
-
-**Phase:** Core implementation — must be validated in the testing phase
+**Phase:** Phase 2
 
 ---
 
-### Pitfall 6: Using Python `threading` Module for Timer
+### Pitfall 6: Using Python `threading` Module
 
-**What goes wrong:** Using `import threading` and `threading.Timer(0.4, callback).start()` to implement the 400ms delay. This works in isolation but creates serious problems in the Live environment.
+Not applicable to send toggles specifically, but the same prohibition applies. Use `_register_timer_callback`. Do not use `import threading`.
 
-**Why it happens:** `threading.Timer` is the obvious Python way to "call a function after N seconds." The Remotify community documents threading as a viable approach for LED animations. It looks correct.
-
-**Consequences:**
-- The callback fires from a background thread, not from Live's main thread. All Live API calls (`track.solo`, `track.mute`) must be made from the main thread. Calling them from a thread causes either silent failure, a runtime crash, or corrupted state in Live's internal data model.
-- The thread is not paused when the component is disabled (e.g., during shift mode, or when the script restarts). The callback fires regardless of component state.
-- No built-in cleanup mechanism — threads that are created but whose callbacks fire after disconnect may reference freed objects.
-- Live's embedded Python environment does not guarantee standard library thread behavior, and thread safety in this context is untested by the community.
-
-**Prevention:** Use `_register_timer_callback` with a tick counter as documented in `STACK.md`. This runs on Live's main thread, is component-aware, and is already proven in this codebase. Do not use `threading` for timing.
-
-**Detection (warning signs):**
-- Any `import threading` in `SpecialChanStripComponent.py`
-- Any `time.sleep()` call in a value handler
-- Intermittent crashes in `Log.txt` mentioning thread context or Live API calls from non-main threads
-
-**Phase:** Core implementation
-
----
-
-## Moderate Pitfalls
-
-Mistakes that cause incorrect behavior in specific edge cases. Not show-stoppers, but produce unprofessional results.
-
----
-
-### Pitfall 7: Tick Counter Not Reset After Release
-
-**What goes wrong:** The tick counter that tracks press duration (`_solo_press_ticks`) is not reset to a sentinel value (e.g., `-1`) after the button is released. On the next press, the counter starts from its previous value instead of zero, causing the threshold to be hit on a shorter press or a very short press to behave as a long press.
-
-**Why it happens:** The reset step happens after the decision branch at release time and is easy to forget or to place in the wrong branch.
-
-**Consequences:**
-- Second press of the same button always triggers long-press behavior
-- Threshold appears to "drift" — first press feels right, subsequent presses feel wrong
-- Bug is masked if only one press is tested in isolation
-
-**Prevention:** On release (`value == 0`), unconditionally reset the tick counter to its sentinel value (`-1` or `None`) as the last action in the handler, regardless of which branch (short or long press) was taken.
-
-**Detection (warning signs):**
-- Testing with two consecutive short presses: second press triggers momentary mode unexpectedly
-- Counter variable not being set back to `-1` in the `value == 0` branch of the value handler
-
-**Phase:** Core implementation
-
----
-
-### Pitfall 8: LED Forced to Update Manually When Framework Already Handles It
-
-**What goes wrong:** The implementation calls `self._solo_button.turn_on()` or `turn_off()` directly inside the value handler to update the LED. This creates two sources of truth for LED state: the script's manual calls and the framework's automatic `_on_solo_changed` listener.
-
-**Why it happens:** The impulse to "make sure the LED is right" causes developers to add explicit LED calls. This seems harmless but creates race conditions and double-fires.
-
-**Consequences:**
-- LED flickers briefly as both updates land within the same tick
-- Manual LED call fires before `track.solo` actually changes, showing incorrect state for one tick
-- If `track.solo` assignment fails silently (e.g., track is in a state that prevents solo changes), LED shows the wrong state permanently because it was forced manually
-
-**Prevention:** Trust the framework's automatic LED update path. `_on_solo_changed` fires automatically whenever `track.solo` changes (this is a Live listener registered in `ChannelStripComponent.__init__`). It calls `self._solo_button.turn_on()` / `turn_off()` based on the actual track state. Do not duplicate this. The only explicit LED calls needed are during momentary transitions if the framework's update path is somehow bypassed — and it should not be.
-
-**Detection (warning signs):**
-- Any `self._solo_button.turn_on()` or `self._solo_button.turn_off()` calls inside `_solo_value`
-- Visible LED flicker on rapid presses (two updates in the same tick)
-
-**Phase:** Core implementation
-
----
-
-### Pitfall 9: Long-Press Inversion Logic Not Checking Current Track State
-
-**What goes wrong:** The "long press on already-active state inverts" requirement means the behavior on press-down depends on the current track state. A naive implementation always applies the same action on press-down without checking whether the track is already in the active state. Long-pressing a soloed track then unsolos it (correct), but long-pressing an unsoloed track also unsolos it (already unsoloed — nothing happens, but no momentary solo activates).
-
-**Why it happens:** Treating the press-down action as "always flip to active" (e.g., `track.solo = True`) rather than "flip away from current state" (e.g., `track.solo = not track.solo`).
-
-**Consequences:**
-- Long-pressing an already-muted track during performance to "temporarily unmute" it does nothing on press-down
-- The feature requirement from `PROJECT.md` line 28 — "Long press on already-soloed/muted track temporarily inverts" — is not met
-
-**Prevention:** On press-down, capture the pre-press state and apply its inverse. `new_state = not current_state`. This works uniformly for both cases: inactive track (activates), active track (deactivates). On release, restore the captured pre-press state.
-
-**Detection (warning signs):**
-- Code that sets `track.solo = True` unconditionally on press-down, rather than `track.solo = not self._solo_state_before_press`
-- Testing the inversion case (long-pressing an already-soloed track) does not temporarily unsolo it
-
-**Phase:** Core implementation
-
----
-
-### Pitfall 10: State Machine Left in Inconsistent State on Component Disable
-
-**What goes wrong:** A button is pressed (press-down received, state changed, timer started), and then the component is disabled mid-press (e.g., shift mode activates while the button is held). The component disable fires, but the button-release MIDI message may never be processed, leaving the press state machine in "holding" state permanently.
-
-**Why it happens:** The Framework can call `set_enabled(False)` on a component at any time. MIDI messages received while the component is disabled are typically dropped by the framework's routing. So the press-down fires, the component disables, and the note-off is never delivered.
-
-**Consequences:**
-- On re-enable, the timer continues counting from where it stopped, and the next press immediately appears to be a "continuation" of the last one
-- Track state may be stuck in the momentary-active condition (soloed/muted) because the release handler never fired to revert it
-
-**Prevention:** Override `set_enabled()` (or respond in an existing `update()` or `on_enabled_changed()` method) to clean up any in-progress press state. If a press is in progress when the component disables, treat it as a release and revert any applied state. Reset the timer counter to its sentinel value.
-
-**Detection (warning signs):**
-- After pressing a button and then pressing Shift before releasing the button, subsequent behavior is wrong
-- Timer counter has a non-sentinel value when the component starts up fresh (test by checking the counter value at `set_enabled(True)`)
-
-**Phase:** Core implementation — consider the "shift pressed mid-hold" scenario explicitly in the test plan
-
----
-
-## Minor Pitfalls
-
-Mistakes that cause code quality issues, test fragility, or subtle bugs that appear rarely.
-
----
-
-### Pitfall 11: Duplicating Timer Logic for Solo and Mute Instead of Abstracting
-
-**What goes wrong:** Separate, near-identical tick counter variables and conditionals are written for each solo button and each mute button — 16 total per component instance. The `_on_timer` method becomes a long series of nearly identical blocks. When a bug is found, it must be fixed in every copy.
-
-**Why it happens:** Each of the 8 `SpecialChanStripComponent` instances manages one track. So per-instance, there are only 2 variables (one for solo, one for mute) — this is actually fine. The risk is writing the timer handler as two large parallel blocks rather than extracting a helper method.
-
-**Prevention:** Extract a helper: `_handle_press_timer(self, ticks_attr, long_press_attr)`. Call it twice in `_on_timer`. Keep the core logic in one place.
-
-**Detection (warning signs):**
-- `_on_timer` body contains near-duplicate blocks for solo and mute
-- A fix applied to the solo logic does not get applied to the mute logic
-
-**Phase:** Refactor opportunity — can be addressed at implementation or review
-
----
-
-### Pitfall 12: Hardcoded Tick Count Instead of Named Constant
-
-**What goes wrong:** `4` is used directly in `_on_timer` instead of a named constant like `LONG_PRESS_THRESHOLD_TICKS`. When the value needs to change (for tuning or the future configurable-threshold milestone), it requires tracking down a bare integer.
-
-**Why it happens:** Quick coding. The concern from `CONCERNS.md` explicitly documents this as a tech debt pattern in this codebase ("Hardcoded Magic Numbers").
-
-**Prevention:** Define `LONG_PRESS_THRESHOLD_TICKS = 4` at the module level in `SpecialChanStripComponent.py` alongside any related comment explaining the math (`4 ticks * 100ms/tick = 400ms`). This is consistent with `TRACK_FOLD_DELAY = 5` already defined at line 8 of the same file.
-
-**Detection (warning signs):**
-- A bare `4` compared against the tick counter in `_on_timer`
-- No module-level constant documenting the relationship between ticks and milliseconds
-
-**Phase:** Core implementation
+**Phase:** Phase 2
 
 ---
 
@@ -274,35 +389,38 @@ Mistakes that cause code quality issues, test fragility, or subtle bugs that app
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| Core implementation: press-down action | Activating state at threshold instead of at press-down (Pitfall 1) | Write the state change in `value != 0` branch, before starting the timer |
-| Core implementation: timer setup | Forgetting `_unregister_timer_callback` in `disconnect()` (Pitfall 2) | Write the disconnect call immediately when adding the register call |
-| Core implementation: value handler override | Placing logic in `_on_solo_changed` instead of `_solo_value` (Pitfall 3) | Read `ChannelStripComponent.py` source before writing the override to confirm the correct method |
-| Core implementation: pre-press state | Capturing state at release time instead of press-down (Pitfall 4) | The `_solo_state_before_press` assignment must be inside `if value != 0:`, not `else:` |
-| Core implementation: shift compatibility | Breaking sequencer loop-length buttons by not guarding shift (Pitfall 5) | Add `if self._shift_pressed: return` (or equivalent) as the first line of the value handler |
-| Core implementation: timing mechanism | Using threading instead of `_register_timer_callback` (Pitfall 6) | Do not import `threading` — this is non-negotiable |
-| Testing: regression check | Shift + Solo and Shift + Mute behaviors must be tested explicitly | Test matrix: short press (solo off), short press (solo on), long press (solo off), long press (solo on), shift + solo |
-| Testing: tick counter reset | Tick counter not resetting between presses (Pitfall 7) | Test two consecutive short presses on same button — second press must behave identically to first |
-| Testing: component disable mid-press | State machine inconsistency on enable/disable (Pitfall 10) | Test: press button, press shift before releasing, release shift, press button again — all must behave correctly |
+| Phase 1 — encoder dual-row design | Dual-assignment of encoders without release (Pitfall E1) | Call `release_parameter()` before every new `connect_to()` |
+| Phase 1 — encoder row extension | Extending `EncModeSelectorComponent` to 16 controls (Pitfall E2) | Keep two separate components; do not pass 16-element tuple |
+| Phase 1 — mode exit cleanup | Device encoder parameters not released on mode exit (Pitfall E3) | Pair every assign with a teardown release in the mode exit path |
+| Phase 1 — timer interaction | Adding timer state to `EncModeSelectorComponent` (Pitfall E4) | Keep encoder mode component timer clean; separate concerns |
+| Phase 1 — bank persistence | Device encoder bank index resets on mode switch (Pitfall E5) | Explicit bank lock in Pan mode activation |
+| Phase 2 — send button dual role | Same button = mode switch AND send toggle (Pitfall S1) | Design decision required before code; document disambiguation rule |
+| Phase 2 — API path verification | `track.send_a` does not exist (Pitfall S2) | Verify `track.mixer_device.sends[n].enabled` before any code |
+| Phase 2 — send index coordination | Send toggle always uses wrong index (Pitfall S3) | Send toggle must receive send_index at call time, not infer it |
+| Phase 2 — LED management | Send enable LED never updates (Pitfall S4) | Manual LED update + `add_enabled_listener` registration |
+| Phase 2 — shift guard | Shift + Send A triggers send toggle (Pitfall S5) | `_shift_pressed` guard as first check in value handler |
+| Phase 2 — release semantics | Mode latch + momentary revert conflict (Pitfall S6) | Design specification: what does "momentary Send B" mean? |
+| Phase 2 — track reassignment | Timer fires for wrong track after bank scroll (Pitfall M4) | Override `set_track()`, reset all timer state before calling parent |
 
 ---
 
 ## Sources
 
+**Codebase (verified, HIGH confidence):**
+- `/Users/stoersignal/Dev/APC_64_40_12/EncModeSelectorComponent.py` — mode 0 (Pan) assigns `set_pan_control`, modes 1-3 assign `set_send_controls`; timer for `_pan_to_vol_ticks_delay` already present
+- `/Users/stoersignal/Dev/APC_64_40_12/APC_64_40_9.py` lines 260-292 — `_global_param_controls` (8 encoders, CC 48-55) and `_global_bank_buttons` (CC notes 87-90) wired to `EncModeSelectorComponent`, `ChannelTranslationSelector`, `EncoderUserModesComponent`, `ShiftableEncoderSelectorComponent`
+- `/Users/stoersignal/Dev/APC_64_40_12/APC_64_40_9.py` lines 200-219 — `device_param_controls` (8 device encoders, CC 16-23) wired to `ShiftableDeviceComponent`
+- `/Users/stoersignal/Dev/APC_64_40_12/EncoderUserModesComponent.py` lines 116-128 — canonical pattern for releasing controls before mode switch and disabling sub-components
+- `/Users/stoersignal/Dev/APC_64_40_12/ToggleMomentaryChannelStripComponent.py` — v1.0 implementation; reference for send toggle pattern
+- `/Users/stoersignal/Dev/APC_64_40_12/SpecialChanStripComponent.py` line 22-26 — `set_send_controls()` calls `update()` on every change; confirmed via code
+- `/Users/stoersignal/Dev/APC_64_40_12/SpecialMixerComponent.py` line 50 — `_create_strip()` returns `ToggleMomentaryChannelStripComponent`; all 8 strips are this type
+- `/Users/stoersignal/Dev/APC_64_40_12/ConfigurableButtonElement.py` lines 45-49 — deferred listener queue pattern
+- `/Users/stoersignal/Dev/APC_64_40_12/ShiftableEncoderSelectorComponent.py` lines 74-101 — shift toggle re-routes encoder bank buttons
+- `.planning/codebase/CONCERNS.md` — Timer cleanup gap in `StepSequencerComponent`, wildcard imports, bare exceptions
+
 **Framework source (verified, HIGH confidence):**
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/Defaults.py` — `TIMER_DELAY = 0.1`, `MOMENTARY_DELAY = 0.3`, `MOMENTARY_DELAY_TICKS = 3`
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ControlSurfaceComponent.py` — `_register_timer_callback`, `_unregister_timer_callback`
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/ChannelStripComponent.py` — `_solo_value`, `_mute_value`, `_on_solo_changed`, `_on_mute_changed`
-- `/Users/stoersignal/Dev/AbletonLive12.1_MIDIRemoteScripts/_Framework/MomentaryModeObserver.py` — `_timer_count >= Defaults.MOMENTARY_DELAY_TICKS` tick-counting pattern (canonical example of how the framework detects momentary vs. toggle)
-
-**Codebase evidence (verified, HIGH confidence):**
-- `/Users/stoersignal/Dev/APC_64_40_12/SpecialChanStripComponent.py` — existing `_register_timer_callback` / `_unregister_timer_callback` pair (correct pattern to replicate)
-- `/Users/stoersignal/Dev/APC_64_40_12/StepSequencerComponent.py` line 84 — timer registration without paired unregistration (the exact bug to avoid, documented in `CONCERNS.md`)
-- `/Users/stoersignal/Dev/APC_64_40_12/APC_64_40_9.py` lines 151-159, 188-192 — solo and mute buttons wired to both mixer and sequencer (context for shift/sequencer compatibility)
-
-**External (MEDIUM confidence — community practice, not official docs):**
-- Ableton Forum: Python API timer callbacks at ~100ms resolution — https://forum.ableton.com/viewtopic.php?t=179893
-- Remotify Community: Threading for timer animation in Ableton — threading approach documented but shown to carry Live API thread-safety risks — https://community.remotify.io/questions/question/found-a-way-to-use-timers-animation-with-ableton/
-- Control-Surface GitHub Issue #235: LED state management for toggle vs momentary — https://github.com/tttapa/Control-Surface/issues/235
+- `_Framework/ChannelStripComponent.py` — `set_send_controls()` maps encoders to send *level*, not send enable; no built-in send enable button support
+- `_Framework/ControlSurfaceComponent.py` — `_register_timer_callback`, `_unregister_timer_callback`
 
 ---
 
