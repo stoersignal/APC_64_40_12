@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 16Macros
-status: defining_requirements
-stopped_at: Milestone v1.1 started
-last_updated: "2026-03-31T15:14:02.562Z"
+status: ready_to_plan
+stopped_at: Roadmap created for v1.1; Phase 4 ready to plan
+last_updated: "2026-03-31T00:00:00.000Z"
 last_activity: 2026-03-31
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
+  total_phases: 2
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** Solo and Mute buttons must feel responsive and predictable — short taps toggle, longer holds act momentary, with LED feedback always reflecting the current real-time state.
-**Current focus:** Milestone v1.1 — 16Macros
+**Current focus:** Phase 4 — 16-Parameter Encoder Mapping
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-31 — Milestone v1.1 started
+Phase: 4 of 5 (16-Parameter Encoder Mapping)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-03-31 — v1.1 roadmap created; phases 4-5 defined
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,8 +36,8 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: —
+- Total plans completed: 0 (v1.1 milestone)
+- Average duration: ~5min/plan (v1.0 reference)
 - Total execution time: —
 
 **By Phase:**
@@ -52,9 +52,6 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
-| Phase 01-scaffolding P01 | 5min | 2 tasks | 2 files |
-| Phase 02-core-logic P01 | 4min | 2 tasks | 5 files |
-| Phase 03-hardening P01 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -63,16 +60,11 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Init: 400ms threshold fixed constant (not configurable) — ~400ms = 4 ticks at 100ms/tick
-- Init: Long press inverts current state (momentarily un-solos a soloed track) — not always-activate
-- Init: Solo and Mute only — Track Activator excluded from v1 scope
-- [Phase 01-scaffolding]: No _register_timer_callback in subclass — Python virtual dispatch handles timer routing without double-registration (D-04)
-- [Phase 01-scaffolding]: LONG_PRESS_DELAY = 4 at module level (4 ticks x 100ms = 400ms) — mirrors TRACK_FOLD_DELAY pattern (D-06)
-- [Phase 02-core-logic]: Exclusive solo tradeoff: _solo_value writes self._track.solo directly, bypassing exclusive-solo propagation — acceptable for toggle/momentary timing focus; revisit in Phase 3 if regression observed
-- [Phase 02-core-logic]: _shift_pressed attribute confirmed accessible in subclass — STATE.md blocker resolved; no additional wiring needed
-- [Phase 02-core-logic]: getattr/setattr DRY helper pattern established: _handle_toggle_momentary serves both solo and mute via attribute names as parameters
-- [Phase 03-hardening]: Zero code changes needed for MULTI-01/02/03 — per-instance state machine from Phase 2 satisfies all three requirements; tests were the only addition
-- [Phase 03-hardening]: disconnect() hardening adds momentary revert guards before counter resets and parent call — mirrors set_solo_button()/set_mute_button() pattern exactly
+- v1.0: LONG_PRESS_DELAY = 4 ticks (400ms) — reuse verbatim in Phase 5
+- v1.0: Fire state at press-down (zero latency) — same contract applies to Send mode buttons
+- v1.1 research: Use `device.parameters[1:17]` directly — `parameter_banks()` column-major interleaving produces wrong ordering for 16-param access
+- v1.1 research: Two `Pan16DeviceComponent` instances (bank 0, bank 1) — each receives 8 controls; do not pass 16 controls to one component (asserts len==8)
+- v1.1 research: `_pan_to_vol_ticks_delay` unification pending — decide before writing `_on_timer` in Phase 5; unified approach preferred
 
 ### Pending Todos
 
@@ -80,10 +72,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- Confirm `_shift_button` attribute accessibility in new subclass before writing shift guard in Phase 2 (see research SUMMARY.md gaps)
+- [Phase 4]: Verify two DeviceComponent instances targeting same appointed device do not conflict via `_device_bank_registry` — empirical check required early in Phase 4 before wiring controls (confidence: MEDIUM per research)
 
 ## Session Continuity
 
-Last session: 2026-03-31T12:37:19.715Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-03-31
+Stopped at: Roadmap created for v1.1; Phase 4 ready to plan
 Resume file: None

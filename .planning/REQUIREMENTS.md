@@ -56,26 +56,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENC-01 | — | Pending |
-| ENC-02 | — | Pending |
-| ENC-03 | — | Pending |
-| ENC-04 | — | Pending |
-| ENC-05 | — | Pending |
-| ENC-06 | — | Pending |
-| ENC-07 | — | Pending |
-| SEND-01 | — | Pending |
-| SEND-02 | — | Pending |
-| SEND-03 | — | Pending |
-| SEND-04 | — | Pending |
-| MINT-01 | — | Pending |
-| MINT-02 | — | Pending |
-| MINT-03 | — | Pending |
+| ENC-01 | Phase 4 | Pending |
+| ENC-02 | Phase 4 | Pending |
+| ENC-03 | Phase 4 | Pending |
+| ENC-04 | Phase 4 | Pending |
+| ENC-05 | Phase 4 | Pending |
+| ENC-06 | Phase 4 | Pending |
+| ENC-07 | Phase 4 | Pending |
+| SEND-01 | Phase 5 | Pending |
+| SEND-02 | Phase 5 | Pending |
+| SEND-03 | Phase 5 | Pending |
+| SEND-04 | Phase 5 | Pending |
+| MINT-01 | Phase 4 | Pending |
+| MINT-02 | Phase 4 | Pending |
+| MINT-03 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14 (pending roadmap creation)
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after initial definition*
+*Last updated: 2026-03-31 after roadmap creation*
