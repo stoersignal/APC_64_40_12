@@ -1,59 +1,54 @@
-# Requirements: APC40 Toggle/Momentary Button Behavior
+# Requirements: v1.1 16Macros
 
 **Defined:** 2026-03-31
-**Core Value:** Solo and Mute buttons must feel responsive and predictable — short taps toggle, longer holds act momentary, with LED feedback always reflecting the current real-time state.
+**Core Value:** Expanded parameter control and responsive mode switching for live performance.
 
 ## v1 Requirements
 
-Requirements for initial release. Each maps to roadmap phases.
+Requirements for this milestone. Each maps to roadmap phases.
 
-### Core Behavior
+### 16-Parameter Encoder Mapping
 
-- [x] **CORE-01**: Short press (<400ms) on Solo button toggles solo state on/off
-- [x] **CORE-02**: Long press (>=400ms) on Solo button acts momentary — solo activates on press-down, reverts on release
-- [x] **CORE-03**: Short press (<400ms) on Mute button toggles mute state on/off
-- [x] **CORE-04**: Long press (>=400ms) on Mute button acts momentary — mute activates on press-down, reverts on release
-- [x] **CORE-05**: State change fires immediately at press-down (no classification delay)
-- [x] **CORE-06**: Long press on already-soloed track temporarily unsolos while held, restores on release
-- [x] **CORE-07**: Long press on already-muted track temporarily unmutes while held, restores on release
+- [ ] **ENC-01**: Pan mode maps top 8 encoders to selected device parameters 1-8
+- [ ] **ENC-02**: Pan mode maps device encoders to selected device parameters 9-16
+- [ ] **ENC-03**: Top 8 encoders are fixed to parameters 1-8 (no bank navigation on top row)
+- [ ] **ENC-04**: Device encoders can navigate deeper banks (params 17-24, 25-32, etc.) via existing bank buttons
+- [ ] **ENC-05**: Encoder LED rings reflect parameter values for both encoder rows in Pan mode
+- [ ] **ENC-06**: Parameters are properly released when leaving Pan mode (no stale encoder bindings)
+- [ ] **ENC-07**: Entering Pan mode does not break device encoder behavior in other modes (Send A/B/C)
 
-### LED Feedback
+### Toggle/Momentary Send Mode Buttons
 
-- [x] **LED-01**: Solo button LED reflects real-time solo state during momentary holds
-- [x] **LED-02**: Mute button LED reflects real-time mute state during momentary holds
-
-### Multi-Track
-
-- [x] **MULTI-01**: User can hold Solo momentary on multiple tracks simultaneously
-- [x] **MULTI-02**: User can hold Mute momentary on multiple tracks simultaneously
-- [x] **MULTI-03**: User can hold Solo on one track and Mute on another simultaneously
+- [ ] **SEND-01**: Short press (<400ms) on Send A/B/C switches encoder mode (existing behavior preserved)
+- [ ] **SEND-02**: Long press (>=400ms) on Send A/B/C acts momentary — mode switches on press-down, reverts to previous mode on release
+- [ ] **SEND-03**: Mode change fires immediately at press-down (no classification delay)
+- [ ] **SEND-04**: Long press on already-active Send mode temporarily reverts to previous mode while held
 
 ### Integration
 
-- [x] **INTG-01**: Existing toggle behavior preserved for short presses (no regression)
-- [x] **INTG-02**: Timer callback properly cleaned up on disconnect (no phantom callbacks)
-- [x] **INTG-03**: Script loads and initializes without errors after modification
+- [ ] **MINT-01**: Existing encoder mode switching behavior preserved for short presses (no regression)
+- [ ] **MINT-02**: Script loads and initializes without errors after modification
+- [ ] **MINT-03**: Pan mode toggle/momentary works alongside Solo/Mute toggle/momentary without interference
 
-## v2 Requirements
+## Future Requirements
 
-### Configurability
+### Extended Encoder Control
 
-- **CFG-01**: Configurable threshold constant (easy to tune without code changes)
-- **CFG-02**: Shift-button safety — clean revert when shift pressed mid-hold
+- **FENC-01**: Lock state persists across mode switches
+- **FENC-02**: Per-device parameter name display
 
-### Extended Scope
+### Extended Mode Buttons
 
-- **EXT-01**: Track Activator (arm) buttons with same dual behavior
-- **EXT-02**: Per-button configurable behavior mode at runtime
+- **FMODE-01**: LED feedback on mode buttons during momentary holds
+- **FMODE-02**: Shift guard for mid-hold safety on mode buttons
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Double-tap detection | Adds latency to every press — anti-feature per research |
-| Threading-based timers | Must stay on main thread for Live API safety |
-| Track Activator buttons | User excluded from v1 scope |
-| Runtime behavior configuration | Overcomplicated for v1; constant is sufficient |
+| Per-track Send A/B/C buttons | APC40 hardware has no per-track send buttons — only global mode selectors |
+| Modifying ShiftableDeviceComponent | Gets disconnected in Pan mode, reconnected in other modes — no internal changes |
+| Bank navigation on top 8 encoders | User specified: top row fixed to params 1-8 |
 
 ## Traceability
 
@@ -61,27 +56,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | Phase 2 | Complete |
-| CORE-02 | Phase 2 | Complete |
-| CORE-03 | Phase 2 | Complete |
-| CORE-04 | Phase 2 | Complete |
-| CORE-05 | Phase 2 | Complete |
-| CORE-06 | Phase 2 | Complete |
-| CORE-07 | Phase 2 | Complete |
-| LED-01 | Phase 2 | Complete |
-| LED-02 | Phase 2 | Complete |
-| MULTI-01 | Phase 3 | Complete |
-| MULTI-02 | Phase 3 | Complete |
-| MULTI-03 | Phase 3 | Complete |
-| INTG-01 | Phase 2 | Complete |
-| INTG-02 | Phase 1 | Complete |
-| INTG-03 | Phase 1 | Complete |
+| ENC-01 | — | Pending |
+| ENC-02 | — | Pending |
+| ENC-03 | — | Pending |
+| ENC-04 | — | Pending |
+| ENC-05 | — | Pending |
+| ENC-06 | — | Pending |
+| ENC-07 | — | Pending |
+| SEND-01 | — | Pending |
+| SEND-02 | — | Pending |
+| SEND-03 | — | Pending |
+| SEND-04 | — | Pending |
+| MINT-01 | — | Pending |
+| MINT-02 | — | Pending |
+| MINT-03 | — | Pending |
 
 **Coverage:**
-- v1 requirements: 15 total
-- Mapped to phases: 15
-- Unmapped: 0
+- v1 requirements: 14 total
+- Mapped to phases: 0
+- Unmapped: 14 (pending roadmap creation)
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after roadmap creation*
+*Last updated: 2026-03-31 after initial definition*
