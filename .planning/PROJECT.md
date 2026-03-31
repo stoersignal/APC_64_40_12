@@ -20,6 +20,9 @@ Solo and Mute buttons must feel responsive and predictable — short taps toggle
 - ✓ Shift-modified button behaviors work — existing
 - ✓ ToggleMomentaryChannelStripComponent scaffolding in place — Phase 1
 - ✓ Timer infrastructure correctly wired (register/unregister) — Phase 1
+- ✓ Toggle/momentary state machine for Solo and Mute buttons — Phase 2
+- ✓ Shared helper, shift guards, timer countdown — Phase 2
+- ✓ LEDs update in real-time during momentary holds — Phase 2
 
 ### Active
 
@@ -81,4 +84,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-31 after Phase 1 completion*
+*Last updated: 2026-03-31 after Phase 2 completion*
