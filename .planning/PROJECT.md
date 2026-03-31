@@ -23,6 +23,8 @@ Solo and Mute buttons must feel responsive and predictable — short taps toggle
 - ✓ Toggle/momentary state machine for Solo and Mute buttons — Phase 2
 - ✓ Shared helper, shift guards, timer countdown — Phase 2
 - ✓ LEDs update in real-time during momentary holds — Phase 2
+- ✓ Multi-track simultaneous holds work independently — Phase 3
+- ✓ disconnect() hardened for mid-hold revert — Phase 3
 
 ### Active
 
@@ -84,4 +86,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-31 after Phase 2 completion*
+*Last updated: 2026-03-31 after Phase 3 completion (all phases complete)*
