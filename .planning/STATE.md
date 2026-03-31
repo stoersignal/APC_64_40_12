@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 16Macros
-status: executing
-stopped_at: Completed 04-16-parameter-encoder-mapping 04-01-PLAN.md
-last_updated: "2026-03-31T21:13:08.099Z"
+status: verifying
+stopped_at: Completed 04-16-parameter-encoder-mapping 04-03-PLAN.md
+last_updated: "2026-03-31T21:16:51.829Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 
 Phase: 04 (16-parameter-encoder-mapping) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-03-31
 
 Progress: [░░░░░░░░░░] 0%
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 04-16-parameter-encoder-mapping P02 | 5 | 2 tasks | 3 files |
 | Phase 04-16-parameter-encoder-mapping P01 | 12 | 1 tasks | 3 files |
+| Phase 04-16-parameter-encoder-mapping P03 | 2 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Recent decisions affecting current work:
 - [Phase 04-16-parameter-encoder-mapping]: Pan16DeviceComponent: no-arg DeviceComponent.__init__(self) gives each instance fresh DeviceBankRegistry — isolation mechanism for two simultaneous instances
 - [Phase 04-16-parameter-encoder-mapping]: Pan16DeviceComponent.set_device() override re-asserts _fixed_bank_index after parent resets to 0 — critical correctness guard for bank-1 instance
 - [Phase 04-16-parameter-encoder-mapping]: Test pattern: inject _Framework stubs via sys.modules before component import to run unit tests outside Ableton Live
+- [Phase 04-16-parameter-encoder-mapping]: Mode-0 clears per-track pan (set_pan_control(None)) in Pan mode per D-04; encoders owned by Pan16DeviceComponent not mixer strips
+- [Phase 04-16-parameter-encoder-mapping]: on_enabled_changed() calls update() on re-enable so mode routing is re-applied after shift mode returns (Pitfall 6 guard)
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T21:13:08.097Z
-Stopped at: Completed 04-16-parameter-encoder-mapping 04-01-PLAN.md
+Last session: 2026-03-31T21:16:51.826Z
+Stopped at: Completed 04-16-parameter-encoder-mapping 04-03-PLAN.md
 Resume file: None

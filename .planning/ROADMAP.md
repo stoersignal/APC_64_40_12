@@ -43,7 +43,7 @@ Key accomplishments:
 Plans:
 - [x] 04-01-PLAN.md — TDD: Pan16DeviceComponent with fixed-bank isolation tests
 - [x] 04-02-PLAN.md — Wire: promote device_param_controls, instantiate Pan16 instances, add EncModeSelectorComponent setter
-- [ ] 04-03-PLAN.md — Implement: rewrite EncModeSelectorComponent.update() Pan mode routing + on_enabled_changed()
+- [x] 04-03-PLAN.md — Implement: rewrite EncModeSelectorComponent.update() Pan mode routing + on_enabled_changed()
 
 ### Phase 5: Toggle/Momentary Send Mode Buttons
 **Goal**: Send A/B/C mode buttons behave as toggle/momentary selectors — short press permanently selects the mode, long press activates while held and reverts to the previous mode on release, with shift guard and disconnect hardening matching v1.0
