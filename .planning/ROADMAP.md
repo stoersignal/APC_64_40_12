@@ -42,7 +42,7 @@ Key accomplishments:
 
 Plans:
 - [ ] 04-01-PLAN.md — TDD: Pan16DeviceComponent with fixed-bank isolation tests
-- [ ] 04-02-PLAN.md — Wire: promote device_param_controls, instantiate Pan16 instances, add EncModeSelectorComponent setter
+- [x] 04-02-PLAN.md — Wire: promote device_param_controls, instantiate Pan16 instances, add EncModeSelectorComponent setter
 - [ ] 04-03-PLAN.md — Implement: rewrite EncModeSelectorComponent.update() Pan mode routing + on_enabled_changed()
 
 ### Phase 5: Toggle/Momentary Send Mode Buttons
@@ -64,5 +64,5 @@ Plans:
 | 1. State Machine | v1.0 | 1/1 | Complete | 2026-03-31 |
 | 2. Hardening | v1.0 | 1/1 | Complete | 2026-03-31 |
 | 3. Multi-Track Hardening | v1.0 | 1/1 | Complete | 2026-03-31 |
-| 4. 16-Parameter Encoder Mapping | v1.1 | 0/3 | Not started | - |
+| 4. 16-Parameter Encoder Mapping | v1.1 | 1/3 | In Progress|  |
 | 5. Toggle/Momentary Send Mode Buttons | v1.1 | 0/? | Not started | - |

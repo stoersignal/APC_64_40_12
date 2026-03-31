@@ -14,8 +14,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [ ] **ENC-03**: Top 8 encoders are fixed to parameters 1-8 (no bank navigation on top row)
 - [ ] **ENC-04**: Device encoders can navigate deeper banks (params 17-24, 25-32, etc.) via existing bank buttons
 - [ ] **ENC-05**: Encoder LED rings reflect parameter values for both encoder rows in Pan mode
-- [ ] **ENC-06**: Parameters are properly released when leaving Pan mode (no stale encoder bindings)
-- [ ] **ENC-07**: Entering Pan mode does not break device encoder behavior in other modes (Send A/B/C)
+- [x] **ENC-06**: Parameters are properly released when leaving Pan mode (no stale encoder bindings)
+- [x] **ENC-07**: Entering Pan mode does not break device encoder behavior in other modes (Send A/B/C)
 
 ### Toggle/Momentary Send Mode Buttons
 
@@ -26,8 +26,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Integration
 
-- [ ] **MINT-01**: Existing encoder mode switching behavior preserved for short presses (no regression)
-- [ ] **MINT-02**: Script loads and initializes without errors after modification
+- [x] **MINT-01**: Existing encoder mode switching behavior preserved for short presses (no regression)
+- [x] **MINT-02**: Script loads and initializes without errors after modification
 - [ ] **MINT-03**: Pan mode toggle/momentary works alongside Solo/Mute toggle/momentary without interference
 
 ## Future Requirements
@@ -61,14 +61,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENC-03 | Phase 4 | Pending |
 | ENC-04 | Phase 4 | Pending |
 | ENC-05 | Phase 4 | Pending |
-| ENC-06 | Phase 4 | Pending |
-| ENC-07 | Phase 4 | Pending |
+| ENC-06 | Phase 4 | Complete |
+| ENC-07 | Phase 4 | Complete |
 | SEND-01 | Phase 5 | Pending |
 | SEND-02 | Phase 5 | Pending |
 | SEND-03 | Phase 5 | Pending |
 | SEND-04 | Phase 5 | Pending |
-| MINT-01 | Phase 4 | Pending |
-| MINT-02 | Phase 4 | Pending |
+| MINT-01 | Phase 4 | Complete |
+| MINT-02 | Phase 4 | Complete |
 | MINT-03 | Phase 5 | Pending |
 
 **Coverage:**
