@@ -50,6 +50,22 @@ class ToggleMomentaryChannelStripComponent(SpecialChanStripComponent):
             '_mute_ticks_delay', '_mute_state_before_press', '_mute_momentary_active'
         )
 
+    def set_solo_button(self, button):
+        if self._solo_momentary_active:
+            if self._track is not None:
+                self._track.solo = self._solo_state_before_press
+            self._solo_momentary_active = False
+        self._solo_ticks_delay = -1
+        SpecialChanStripComponent.set_solo_button(self, button)
+
+    def set_mute_button(self, button):
+        if self._mute_momentary_active:
+            if self._track is not None:
+                self._track.mute = self._mute_state_before_press
+            self._mute_momentary_active = False
+        self._mute_ticks_delay = -1
+        SpecialChanStripComponent.set_mute_button(self, button)
+
     def disconnect(self):
         self._solo_ticks_delay = -1
         self._mute_ticks_delay = -1
@@ -57,7 +73,15 @@ class ToggleMomentaryChannelStripComponent(SpecialChanStripComponent):
 
     def _on_timer(self):
         SpecialChanStripComponent._on_timer(self)  # preserve fold-delay behaviour (D-03)
-        # Phase 2 will add solo/mute tick countdown logic here
+        if self.is_enabled() and self._track is not None:
+            if self._solo_ticks_delay > -1:
+                if self._solo_ticks_delay == 0:
+                    self._solo_momentary_active = True
+                self._solo_ticks_delay -= 1
+            if self._mute_ticks_delay > -1:
+                if self._mute_ticks_delay == 0:
+                    self._mute_momentary_active = True
+                self._mute_ticks_delay -= 1
 
 
 # local variables:
