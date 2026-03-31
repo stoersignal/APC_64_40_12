@@ -26,7 +26,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. Script loads in Ableton Live without errors after adding the new class and changing the factory method
   2. All existing button behaviors (solo toggle, mute toggle, shift-modified actions) work identically to before the change
   3. The timer callback registers on instantiation and unregisters on disconnect — no phantom callbacks after device reconnect
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Create ToggleMomentaryChannelStripComponent class and wire factory
 
 ### Phase 2: Core Logic
 **Goal**: Short press toggles and long press acts momentary for both Solo and Mute buttons across all 8 tracks, with LEDs reflecting real-time state and no regression on short presses
@@ -58,6 +61,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Scaffolding | 0/TBD | Not started | - |
+| 1. Scaffolding | 0/1 | Not started | - |
 | 2. Core Logic | 0/TBD | Not started | - |
 | 3. Hardening | 0/TBD | Not started | - |
