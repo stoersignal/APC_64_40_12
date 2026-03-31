@@ -38,7 +38,12 @@ Key accomplishments:
   3. Switching out of Pan mode (to Send A, B, or C) stops the encoders from affecting device parameters and rings return to normal
   4. Short-pressing Send A, B, or C from Pan mode switches to that mode without any stuck encoder connections (no regression on existing mode switching)
   5. The script loads in Ableton Live without errors after all Phase 4 changes
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — TDD: Pan16DeviceComponent with fixed-bank isolation tests
+- [ ] 04-02-PLAN.md — Wire: promote device_param_controls, instantiate Pan16 instances, add EncModeSelectorComponent setter
+- [ ] 04-03-PLAN.md — Implement: rewrite EncModeSelectorComponent.update() Pan mode routing + on_enabled_changed()
 
 ### Phase 5: Toggle/Momentary Send Mode Buttons
 **Goal**: Send A/B/C mode buttons behave as toggle/momentary selectors — short press permanently selects the mode, long press activates while held and reverts to the previous mode on release, with shift guard and disconnect hardening matching v1.0
@@ -59,5 +64,5 @@ Key accomplishments:
 | 1. State Machine | v1.0 | 1/1 | Complete | 2026-03-31 |
 | 2. Hardening | v1.0 | 1/1 | Complete | 2026-03-31 |
 | 3. Multi-Track Hardening | v1.0 | 1/1 | Complete | 2026-03-31 |
-| 4. 16-Parameter Encoder Mapping | v1.1 | 0/? | Not started | - |
+| 4. 16-Parameter Encoder Mapping | v1.1 | 0/3 | Not started | - |
 | 5. Toggle/Momentary Send Mode Buttons | v1.1 | 0/? | Not started | - |
