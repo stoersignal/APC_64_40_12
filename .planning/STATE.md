@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 16Macros
-status: verifying
-stopped_at: Phase 5 context gathered
-last_updated: "2026-03-31T21:25:49.861Z"
+status: executing
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-31T21:45:45.143Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** Solo and Mute buttons must feel responsive and predictable — short taps toggle, longer holds act momentary, with LED feedback always reflecting the current real-time state.
-**Current focus:** Phase 04 — 16-parameter-encoder-mapping
+**Current focus:** Phase 05 — toggle-momentary-send-mode-buttons
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 05 (toggle-momentary-send-mode-buttons) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-03-31
 
 Progress: [░░░░░░░░░░] 0%
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04-16-parameter-encoder-mapping P02 | 5 | 2 tasks | 3 files |
 | Phase 04-16-parameter-encoder-mapping P01 | 12 | 1 tasks | 3 files |
 | Phase 04-16-parameter-encoder-mapping P03 | 2 | 2 tasks | 1 files |
+| Phase 05-toggle-momentary-send-mode-buttons P01 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ Recent decisions affecting current work:
 - [Phase 04-16-parameter-encoder-mapping]: Test pattern: inject _Framework stubs via sys.modules before component import to run unit tests outside Ableton Live
 - [Phase 04-16-parameter-encoder-mapping]: Mode-0 clears per-track pan (set_pan_control(None)) in Pan mode per D-04; encoders owned by Pan16DeviceComponent not mixer strips
 - [Phase 04-16-parameter-encoder-mapping]: on_enabled_changed() calls update() on re-enable so mode routing is re-applied after shift mode returns (Pitfall 6 guard)
+- [Phase 05-toggle-momentary-send-mode-buttons]: LONG_PRESS_DELAY = 4 defined locally in EncModeSelectorComponent.py (not imported from ToggleMomentaryChannelStripComponent) — avoids cross-file import
+- [Phase 05-toggle-momentary-send-mode-buttons]: Send mode revert target hardcoded to mode 0 (Pan) per D-04 — no _mode_before_send_press needed
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T21:25:49.858Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-toggle-momentary-send-mode-buttons/05-CONTEXT.md
+Last session: 2026-03-31T21:45:45.140Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None

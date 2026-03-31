@@ -19,10 +19,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Toggle/Momentary Send Mode Buttons
 
-- [ ] **SEND-01**: Short press (<400ms) on Send A/B/C switches encoder mode (existing behavior preserved)
-- [ ] **SEND-02**: Long press (>=400ms) on Send A/B/C acts momentary — mode switches on press-down, reverts to previous mode on release
-- [ ] **SEND-03**: Mode change fires immediately at press-down (no classification delay)
-- [ ] **SEND-04**: Long press on already-active Send mode temporarily reverts to previous mode while held
+- [x] **SEND-01**: Short press (<400ms) on Send A/B/C switches encoder mode (existing behavior preserved)
+- [x] **SEND-02**: Long press (>=400ms) on Send A/B/C acts momentary — mode switches on press-down, reverts to previous mode on release
+- [x] **SEND-03**: Mode change fires immediately at press-down (no classification delay)
+- [x] **SEND-04**: Long press on already-active Send mode temporarily reverts to previous mode while held
 
 ### Integration
 
@@ -63,10 +63,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENC-05 | Phase 4 | Complete |
 | ENC-06 | Phase 4 | Complete |
 | ENC-07 | Phase 4 | Complete |
-| SEND-01 | Phase 5 | Pending |
-| SEND-02 | Phase 5 | Pending |
-| SEND-03 | Phase 5 | Pending |
-| SEND-04 | Phase 5 | Pending |
+| SEND-01 | Phase 5 | Complete |
+| SEND-02 | Phase 5 | Complete |
+| SEND-03 | Phase 5 | Complete |
+| SEND-04 | Phase 5 | Complete |
 | MINT-01 | Phase 4 | Complete |
 | MINT-02 | Phase 4 | Complete |
 | MINT-03 | Phase 5 | Pending |
