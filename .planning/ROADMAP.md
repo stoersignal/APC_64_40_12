@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Create ToggleMomentaryChannelStripComponent class and wire factory
+- [x] 01-01-PLAN.md — Create ToggleMomentaryChannelStripComponent class and wire factory
 
 ### Phase 2: Core Logic
 **Goal**: Short press toggles and long press acts momentary for both Solo and Mute buttons across all 8 tracks, with LEDs reflecting real-time state and no regression on short presses

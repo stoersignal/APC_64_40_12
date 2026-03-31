@@ -31,8 +31,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Integration
 
 - [ ] **INTG-01**: Existing toggle behavior preserved for short presses (no regression)
-- [ ] **INTG-02**: Timer callback properly cleaned up on disconnect (no phantom callbacks)
-- [ ] **INTG-03**: Script loads and initializes without errors after modification
+- [x] **INTG-02**: Timer callback properly cleaned up on disconnect (no phantom callbacks)
+- [x] **INTG-03**: Script loads and initializes without errors after modification
 
 ## v2 Requirements
 
@@ -74,8 +74,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MULTI-02 | Phase 3 | Pending |
 | MULTI-03 | Phase 3 | Pending |
 | INTG-01 | Phase 2 | Pending |
-| INTG-02 | Phase 1 | Pending |
-| INTG-03 | Phase 1 | Pending |
+| INTG-02 | Phase 1 | Complete |
+| INTG-03 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 15 total
