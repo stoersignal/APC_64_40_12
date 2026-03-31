@@ -55,7 +55,11 @@ Plans:
   3. Mode activation on long press happens at the moment of press-down with no perceptible delay
   4. Holding Shift and pressing a Send mode button does not trigger momentary behavior
   5. Toggle/momentary Send mode behavior does not interfere with Solo/Mute toggle/momentary — both operate independently
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — TDD: Send mode state machine (RED tests + GREEN implementation in EncModeSelectorComponent)
+- [ ] 05-02-PLAN.md — Verify: MINT-03 isolation tests confirming Send and Solo/Mute independence
 
 ## Progress
 
@@ -65,4 +69,4 @@ Plans:
 | 2. Hardening | v1.0 | 1/1 | Complete | 2026-03-31 |
 | 3. Multi-Track Hardening | v1.0 | 1/1 | Complete | 2026-03-31 |
 | 4. 16-Parameter Encoder Mapping | v1.1 | 2/3 | In Progress|  |
-| 5. Toggle/Momentary Send Mode Buttons | v1.1 | 0/? | Not started | - |
+| 5. Toggle/Momentary Send Mode Buttons | v1.1 | 0/2 | Not started | - |
