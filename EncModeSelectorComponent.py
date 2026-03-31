@@ -123,8 +123,8 @@ class EncModeSelectorComponent(ModeSelectorComponent):
                     self._mixer.channel_strip(index).set_pan_control(None)
                     self._mixer.channel_strip(index).set_send_controls((None, None, None))
                 # Step 2: Release ShiftableDeviceComponent from device encoders (per ENC-07).
-                if self._device_component is not None:
-                    self._device_component.set_parameter_controls(None)
+                if self._device_component is not None and self._device_controls is not None:
+                    self._device_component.set_parameter_controls(tuple())
                 # Step 3: Assign top 8 encoders to params 1-8 (per ENC-01, ENC-03).
                 if self._pan16_top is not None:
                     self._pan16_top.set_parameter_controls(self._controls)

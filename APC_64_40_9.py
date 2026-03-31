@@ -280,13 +280,18 @@ class APC_64_40_9(APC):
             self._global_bank_buttons[-1].name = global_bank_labels[index]
         self._encoder_modes = EncModeSelectorComponent(self._mixer)
         self._encoder_modes.name = 'Track_Control_Modes'
-        self._encoder_modes.set_controls(tuple(self._global_param_controls))
-        # Per D-01, D-10: instantiate Pan16DeviceComponent instances and inject into EncModeSelectorComponent
+        # Per D-01, D-10: instantiate Pan16DeviceComponent instances and inject BEFORE set_controls
+        # so that update() (triggered by set_controls) sees them
         from .Pan16DeviceComponent import Pan16DeviceComponent
         self._pan16_top = Pan16DeviceComponent(bank_index=0)
         self._pan16_top.name = 'Pan16_Top_Encoders'
         self._pan16_enc = Pan16DeviceComponent(bank_index=1)
         self._pan16_enc.name = 'Pan16_Device_Encoders'
+        # Set initial appointed device so encoders map on first Pan mode entry
+        appointed = self.song().appointed_device
+        if appointed is not None:
+            self._pan16_top.set_device(appointed)
+            self._pan16_enc.set_device(appointed)
         self._encoder_modes.set_pan16_components(
             pan16_top=self._pan16_top,
             pan16_enc=self._pan16_enc,
@@ -294,6 +299,7 @@ class APC_64_40_9(APC):
             device_controls=tuple(self._device_param_controls),
             bank_nav_buttons=(self._device_bank_buttons[2], self._device_bank_buttons[3])
         )
+        self._encoder_modes.set_controls(tuple(self._global_param_controls))
         self._encoder_device_modes = EncoderDeviceComponent(self._mixer, self._device, self)
         self._encoder_device_modes.name = 'Alt_Device_Control_Modes'
         self._encoder_eq_modes = EncoderEQComponent(self._mixer, self)
