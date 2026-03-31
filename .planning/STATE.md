@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-31T12:19:34.130Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-31T12:37:19.718Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
   percent: 0
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** Solo and Mute buttons must feel responsive and predictable — short taps toggle, longer holds act momentary, with LED feedback always reflecting the current real-time state.
-**Current focus:** Phase 02 — core-logic
+**Current focus:** Phase 03 — hardening
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
+Phase: 03 (hardening) — EXECUTING
+Plan: 1 of 1
 Status: Phase complete — ready for verification
 Last activity: 2026-03-31
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 01-scaffolding P01 | 5min | 2 tasks | 2 files |
 | Phase 02-core-logic P01 | 4min | 2 tasks | 5 files |
+| Phase 03-hardening P01 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Recent decisions affecting current work:
 - [Phase 02-core-logic]: Exclusive solo tradeoff: _solo_value writes self._track.solo directly, bypassing exclusive-solo propagation — acceptable for toggle/momentary timing focus; revisit in Phase 3 if regression observed
 - [Phase 02-core-logic]: _shift_pressed attribute confirmed accessible in subclass — STATE.md blocker resolved; no additional wiring needed
 - [Phase 02-core-logic]: getattr/setattr DRY helper pattern established: _handle_toggle_momentary serves both solo and mute via attribute names as parameters
+- [Phase 03-hardening]: Zero code changes needed for MULTI-01/02/03 — per-instance state machine from Phase 2 satisfies all three requirements; tests were the only addition
+- [Phase 03-hardening]: disconnect() hardening adds momentary revert guards before counter resets and parent call — mirrors set_solo_button()/set_mute_button() pattern exactly
 
 ### Pending Todos
 
@@ -81,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T12:11:24.948Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-31T12:37:19.715Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None

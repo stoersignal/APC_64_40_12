@@ -24,9 +24,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Multi-Track
 
-- [ ] **MULTI-01**: User can hold Solo momentary on multiple tracks simultaneously
-- [ ] **MULTI-02**: User can hold Mute momentary on multiple tracks simultaneously
-- [ ] **MULTI-03**: User can hold Solo on one track and Mute on another simultaneously
+- [x] **MULTI-01**: User can hold Solo momentary on multiple tracks simultaneously
+- [x] **MULTI-02**: User can hold Mute momentary on multiple tracks simultaneously
+- [x] **MULTI-03**: User can hold Solo on one track and Mute on another simultaneously
 
 ### Integration
 
@@ -70,9 +70,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-07 | Phase 2 | Complete |
 | LED-01 | Phase 2 | Complete |
 | LED-02 | Phase 2 | Complete |
-| MULTI-01 | Phase 3 | Pending |
-| MULTI-02 | Phase 3 | Pending |
-| MULTI-03 | Phase 3 | Pending |
+| MULTI-01 | Phase 3 | Complete |
+| MULTI-02 | Phase 3 | Complete |
+| MULTI-03 | Phase 3 | Complete |
 | INTG-01 | Phase 2 | Complete |
 | INTG-02 | Phase 1 | Complete |
 | INTG-03 | Phase 1 | Complete |
