@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-03-31T22:26:31.520Z",
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "milestone_complete",
+  "completed_tasks": [],
+  "remaining_tasks": [],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Sequential _parameter_banks() override in Pan16DeviceComponent", "rationale": "Framework column-major interleaving gives wrong param order", "phase": "4"},
+    {"decision": "Init order: Pan16 components created before set_controls()", "rationale": "update() triggered by set_controls() needs Pan16 references to exist", "phase": "4"},
+    {"decision": "Pass tuple() not None to ShiftableDeviceComponent.set_parameter_controls()", "rationale": "ChannelTranslationSelector.set_controls_to_translate() cannot iterate None", "phase": "4"},
+    {"decision": "Send long-press always reverts to Pan (mode 0)", "rationale": "Simpler than tracking previous mode", "phase": "5"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Start next milestone with /gsd:new-milestone",
+  "context_notes": "v1.0 and v1.1 both shipped and verified in Ableton Live. 80 tests passing. All features working: Solo/Mute toggle/momentary, 16-param encoder mapping in Pan mode, Send A/B/C toggle/momentary. Ready for next milestone."
+}
