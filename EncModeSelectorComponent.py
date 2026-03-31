@@ -143,6 +143,24 @@ class EncModeSelectorComponent(ModeSelectorComponent):
                         print('Invalid mode index')
                         raise AssertionError
         
+    def on_enabled_changed(self):
+        # When EncoderUserModesComponent disables this component (shift mode switch),
+        # release Pan16DeviceComponent instances to prevent stale encoder bindings.
+        # Pitfall 6 guard: without this, device encoders keep controlling device params
+        # after shift is pressed and encoder user mode changes away from mode 0.
+        if not self.is_enabled():
+            if self._pan16_top is not None:
+                self._pan16_top.set_enabled(False)
+            if self._pan16_enc is not None:
+                self._pan16_enc.set_enabled(False)
+        else:
+            # Re-enable on component re-enable; update() will route correctly.
+            if self._pan16_top is not None:
+                self._pan16_top.set_enabled(True)
+            if self._pan16_enc is not None:
+                self._pan16_enc.set_enabled(True)
+            self.update()
+
     def _on_timer(self): #added to allow press & hold for Pan/Vol Mode selection
         if (self.is_enabled()):
             if (self._pan_to_vol_ticks_delay > -1):
