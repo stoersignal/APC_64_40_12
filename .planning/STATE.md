@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 16Macros
 status: executing
-stopped_at: Completed 04-16-parameter-encoder-mapping/04-02-PLAN.md
-last_updated: "2026-03-31T21:03:57.932Z"
+stopped_at: Completed 04-16-parameter-encoder-mapping 04-01-PLAN.md
+last_updated: "2026-03-31T21:13:08.099Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 ## Current Position
 
 Phase: 04 (16-parameter-encoder-mapping) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-03-31
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 04-16-parameter-encoder-mapping P02 | 5 | 2 tasks | 3 files |
+| Phase 04-16-parameter-encoder-mapping P01 | 12 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - v1.1 research: Two `Pan16DeviceComponent` instances (bank 0, bank 1) — each receives 8 controls; do not pass 16 controls to one component (asserts len==8)
 - v1.1 research: `_pan_to_vol_ticks_delay` unification pending — decide before writing `_on_timer` in Phase 5; unified approach preferred
 - [Phase 04-16-parameter-encoder-mapping]: 04-02: Pan16DeviceComponent injected into EncModeSelectorComponent via set_pan16_components() setter; device_param_controls and device_bank_buttons promoted to instance variables
+- [Phase 04-16-parameter-encoder-mapping]: Pan16DeviceComponent: no-arg DeviceComponent.__init__(self) gives each instance fresh DeviceBankRegistry — isolation mechanism for two simultaneous instances
+- [Phase 04-16-parameter-encoder-mapping]: Pan16DeviceComponent.set_device() override re-asserts _fixed_bank_index after parent resets to 0 — critical correctness guard for bank-1 instance
+- [Phase 04-16-parameter-encoder-mapping]: Test pattern: inject _Framework stubs via sys.modules before component import to run unit tests outside Ableton Live
 
 ### Pending Todos
 
@@ -78,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T21:03:57.929Z
-Stopped at: Completed 04-16-parameter-encoder-mapping/04-02-PLAN.md
+Last session: 2026-03-31T21:13:08.097Z
+Stopped at: Completed 04-16-parameter-encoder-mapping 04-01-PLAN.md
 Resume file: None

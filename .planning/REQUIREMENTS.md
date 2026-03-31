@@ -9,11 +9,11 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### 16-Parameter Encoder Mapping
 
-- [ ] **ENC-01**: Pan mode maps top 8 encoders to selected device parameters 1-8
-- [ ] **ENC-02**: Pan mode maps device encoders to selected device parameters 9-16
-- [ ] **ENC-03**: Top 8 encoders are fixed to parameters 1-8 (no bank navigation on top row)
-- [ ] **ENC-04**: Device encoders can navigate deeper banks (params 17-24, 25-32, etc.) via existing bank buttons
-- [ ] **ENC-05**: Encoder LED rings reflect parameter values for both encoder rows in Pan mode
+- [x] **ENC-01**: Pan mode maps top 8 encoders to selected device parameters 1-8
+- [x] **ENC-02**: Pan mode maps device encoders to selected device parameters 9-16
+- [x] **ENC-03**: Top 8 encoders are fixed to parameters 1-8 (no bank navigation on top row)
+- [x] **ENC-04**: Device encoders can navigate deeper banks (params 17-24, 25-32, etc.) via existing bank buttons
+- [x] **ENC-05**: Encoder LED rings reflect parameter values for both encoder rows in Pan mode
 - [x] **ENC-06**: Parameters are properly released when leaving Pan mode (no stale encoder bindings)
 - [x] **ENC-07**: Entering Pan mode does not break device encoder behavior in other modes (Send A/B/C)
 
@@ -56,11 +56,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENC-01 | Phase 4 | Pending |
-| ENC-02 | Phase 4 | Pending |
-| ENC-03 | Phase 4 | Pending |
-| ENC-04 | Phase 4 | Pending |
-| ENC-05 | Phase 4 | Pending |
+| ENC-01 | Phase 4 | Complete |
+| ENC-02 | Phase 4 | Complete |
+| ENC-03 | Phase 4 | Complete |
+| ENC-04 | Phase 4 | Complete |
+| ENC-05 | Phase 4 | Complete |
 | ENC-06 | Phase 4 | Complete |
 | ENC-07 | Phase 4 | Complete |
 | SEND-01 | Phase 5 | Pending |
