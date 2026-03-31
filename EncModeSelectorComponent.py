@@ -99,22 +99,49 @@ class EncModeSelectorComponent(ModeSelectorComponent):
                     button.turn_off()
 
         if (self._controls != None) and (self.is_enabled()):
-            for index in range(len(self._controls)):
-                if self._mode_index == 0:
-                    self._mixer.channel_strip(index).set_pan_control(self._controls[index])
+            if self._mode_index == 0:
+                # Pan mode: assign both encoder rows to device parameters 1-16.
+                # Per D-04: per-track pan is disabled in this mode.
+                # Per D-05: ShiftableDeviceComponent releases device encoders.
+                # Step 1: Clear mixer pan/send assignments from top encoders.
+                for index in range(len(self._controls)):
+                    self._mixer.channel_strip(index).set_pan_control(None)
                     self._mixer.channel_strip(index).set_send_controls((None, None, None))
-                elif self._mode_index == 1:
+                # Step 2: Release ShiftableDeviceComponent from device encoders (per ENC-07).
+                if self._device_component is not None:
+                    self._device_component.set_parameter_controls(None)
+                # Step 3: Assign top 8 encoders to params 1-8 (per ENC-01, ENC-03).
+                if self._pan16_top is not None:
+                    self._pan16_top.set_parameter_controls(self._controls)
+                # Step 4: Assign device 8 encoders to params 9-16 with bank nav (per ENC-02, ENC-04, D-06).
+                if self._pan16_enc is not None:
+                    self._pan16_enc.set_parameter_controls(self._device_controls)
+                    if self._bank_nav_buttons is not None:
+                        self._pan16_enc.set_bank_nav_buttons(
+                            self._bank_nav_buttons[0], self._bank_nav_buttons[1]
+                        )
+            else:
+                # Non-Pan modes: release Pan16DeviceComponent instances (per ENC-06)
+                # and restore ShiftableDeviceComponent to device encoders (per ENC-07).
+                if self._pan16_top is not None:
+                    self._pan16_top.set_parameter_controls(None)
+                if self._pan16_enc is not None:
+                    self._pan16_enc.set_parameter_controls(None)
+                    self._pan16_enc.set_bank_nav_buttons(None, None)
+                if self._device_component is not None:
+                    self._device_component.set_parameter_controls(self._device_controls)
+                # Assign top encoders to mixer sends per mode (per MINT-01).
+                for index in range(len(self._controls)):
                     self._mixer.channel_strip(index).set_pan_control(None)
-                    self._mixer.channel_strip(index).set_send_controls((self._controls[index], None, None))
-                elif self._mode_index == 2:
-                    self._mixer.channel_strip(index).set_pan_control(None)
-                    self._mixer.channel_strip(index).set_send_controls((None, self._controls[index], None))
-                elif self._mode_index == 3:
-                    self._mixer.channel_strip(index).set_pan_control(None)
-                    self._mixer.channel_strip(index).set_send_controls((None, None, self._controls[index]))
-                else:
-                    print('Invalid mode index')
-                    raise False or AssertionError
+                    if self._mode_index == 1:
+                        self._mixer.channel_strip(index).set_send_controls((self._controls[index], None, None))
+                    elif self._mode_index == 2:
+                        self._mixer.channel_strip(index).set_send_controls((None, self._controls[index], None))
+                    elif self._mode_index == 3:
+                        self._mixer.channel_strip(index).set_send_controls((None, None, self._controls[index]))
+                    else:
+                        print('Invalid mode index')
+                        raise AssertionError
         
     def _on_timer(self): #added to allow press & hold for Pan/Vol Mode selection
         if (self.is_enabled()):
