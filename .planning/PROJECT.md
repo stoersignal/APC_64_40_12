@@ -18,6 +18,8 @@ Solo and Mute buttons must feel responsive and predictable — short taps toggle
 - ✓ Button LEDs reflect current track state — existing
 - ✓ Session, mixer, device, transport controls function — existing
 - ✓ Shift-modified button behaviors work — existing
+- ✓ ToggleMomentaryChannelStripComponent scaffolding in place — Phase 1
+- ✓ Timer infrastructure correctly wired (register/unregister) — Phase 1
 
 ### Active
 
@@ -79,4 +81,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-31 after initialization*
+*Last updated: 2026-03-31 after Phase 1 completion*
