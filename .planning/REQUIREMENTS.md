@@ -61,27 +61,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | — | Pending |
-| CORE-02 | — | Pending |
-| CORE-03 | — | Pending |
-| CORE-04 | — | Pending |
-| CORE-05 | — | Pending |
-| CORE-06 | — | Pending |
-| CORE-07 | — | Pending |
-| LED-01 | — | Pending |
-| LED-02 | — | Pending |
-| MULTI-01 | — | Pending |
-| MULTI-02 | — | Pending |
-| MULTI-03 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
+| CORE-01 | Phase 2 | Pending |
+| CORE-02 | Phase 2 | Pending |
+| CORE-03 | Phase 2 | Pending |
+| CORE-04 | Phase 2 | Pending |
+| CORE-05 | Phase 2 | Pending |
+| CORE-06 | Phase 2 | Pending |
+| CORE-07 | Phase 2 | Pending |
+| LED-01 | Phase 2 | Pending |
+| LED-02 | Phase 2 | Pending |
+| MULTI-01 | Phase 3 | Pending |
+| MULTI-02 | Phase 3 | Pending |
+| MULTI-03 | Phase 3 | Pending |
+| INTG-01 | Phase 2 | Pending |
+| INTG-02 | Phase 1 | Pending |
+| INTG-03 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 (pending roadmap creation)
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after initial definition*
+*Last updated: 2026-03-31 after roadmap creation*
