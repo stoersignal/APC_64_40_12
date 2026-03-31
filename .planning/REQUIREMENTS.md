@@ -28,7 +28,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **MINT-01**: Existing encoder mode switching behavior preserved for short presses (no regression)
 - [x] **MINT-02**: Script loads and initializes without errors after modification
-- [ ] **MINT-03**: Pan mode toggle/momentary works alongside Solo/Mute toggle/momentary without interference
+- [x] **MINT-03**: Pan mode toggle/momentary works alongside Solo/Mute toggle/momentary without interference
 
 ## Future Requirements
 
@@ -69,7 +69,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEND-04 | Phase 5 | Complete |
 | MINT-01 | Phase 4 | Complete |
 | MINT-02 | Phase 4 | Complete |
-| MINT-03 | Phase 5 | Pending |
+| MINT-03 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 14 total

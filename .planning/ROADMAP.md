@@ -59,7 +59,7 @@ Plans:
 
 Plans:
 - [x] 05-01-PLAN.md — TDD: Send mode state machine (RED tests + GREEN implementation in EncModeSelectorComponent)
-- [ ] 05-02-PLAN.md — Verify: MINT-03 isolation tests confirming Send and Solo/Mute independence
+- [x] 05-02-PLAN.md — Verify: MINT-03 isolation tests confirming Send and Solo/Mute independence
 
 ## Progress
 
