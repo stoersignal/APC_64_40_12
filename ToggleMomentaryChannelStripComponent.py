@@ -67,6 +67,13 @@ class ToggleMomentaryChannelStripComponent(SpecialChanStripComponent):
         SpecialChanStripComponent.set_mute_button(self, button)
 
     def disconnect(self):
+        # Revert any active momentary hold before disconnecting (prevents stuck track state)
+        if self._solo_momentary_active and self._track is not None:
+            self._track.solo = self._solo_state_before_press
+            self._solo_momentary_active = False
+        if self._mute_momentary_active and self._track is not None:
+            self._track.mute = self._mute_state_before_press
+            self._mute_momentary_active = False
         self._solo_ticks_delay = -1
         self._mute_ticks_delay = -1
         SpecialChanStripComponent.disconnect(self)  # handles _unregister_timer_callback
