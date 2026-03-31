@@ -7,6 +7,7 @@ from _Framework.ModeSelectorComponent import ModeSelectorComponent
 from _Framework.ButtonElement import ButtonElement 
 from _Framework.MixerComponent import MixerComponent 
 PAN_TO_VOL_DELAY = 5 #added delay value for _on_timer Pan/Vol Mode selection
+LONG_PRESS_DELAY = 4 # 4 ticks x 100ms = 400ms — same threshold as v1.0 Solo/Mute
 
 class EncModeSelectorComponent(ModeSelectorComponent):
     ' Class that reassigns encoders on the AxiomPro to different mixer functions '
@@ -20,6 +21,8 @@ class EncModeSelectorComponent(ModeSelectorComponent):
         self.set_mode(0) #moved here
         self._pan_to_vol_ticks_delay = -1 #added
         self._mode_is_pan = True #new
+        self._send_ticks_delay = -1        # countdown for Send mode long-press, -1 = inactive
+        self._send_momentary_active = False # True after long-press threshold fires
         self._register_timer_callback(self._on_timer) #added
         self._pan16_top = None
         self._pan16_enc = None
@@ -39,6 +42,8 @@ class EncModeSelectorComponent(ModeSelectorComponent):
         self._device_component = None
         self._device_controls = None
         self._bank_nav_buttons = None
+        self._send_ticks_delay = -1
+        self._send_momentary_active = False
         self._unregister_timer_callback(self._on_timer) #added
         ModeSelectorComponent.disconnect(self)
 
@@ -82,12 +87,22 @@ class EncModeSelectorComponent(ModeSelectorComponent):
             assert isinstance(value, int)
             assert isinstance(sender, ButtonElement)
             assert (self._modes_buttons.count(sender) == 1)
+            index = self._modes_buttons.index(sender)
             if ((value != 0) or (not sender.is_momentary())):
-                self.set_mode(self._modes_buttons.index(sender))
-            if self._modes_buttons.index(sender) == 0 and sender.is_momentary() and (value != 0): #added check for Pan button
+                self.set_mode(index)
+            if index == 0 and sender.is_momentary() and (value != 0): #added check for Pan button
                 self._pan_to_vol_ticks_delay = PAN_TO_VOL_DELAY
             else:
                 self._pan_to_vol_ticks_delay = -1
+            if index >= 1 and sender.is_momentary():
+                if value != 0:  # press-down on Send A/B/C — start countdown
+                    self._send_ticks_delay = LONG_PRESS_DELAY
+                else:           # release on Send A/B/C — revert if momentary was active
+                    if self._send_momentary_active:
+                        self.set_mode(0)
+                        self.update()
+                        self._send_momentary_active = False
+                    self._send_ticks_delay = -1
 
     def update(self):
         assert (self._modes_buttons != None)
@@ -153,6 +168,10 @@ class EncModeSelectorComponent(ModeSelectorComponent):
                 self._pan16_top.set_enabled(False)
             if self._pan16_enc is not None:
                 self._pan16_enc.set_enabled(False)
+            self._send_ticks_delay = -1
+            if self._send_momentary_active:
+                self.set_mode(0)
+                self._send_momentary_active = False
         else:
             # Re-enable on component re-enable; update() will route correctly.
             if self._pan16_top is not None:
@@ -172,6 +191,10 @@ class EncModeSelectorComponent(ModeSelectorComponent):
                         self._show_msg_callback("Set to Volume Mode")
                     self.update()
                 self._pan_to_vol_ticks_delay -= 1
+            if self._send_ticks_delay > -1:
+                if self._send_ticks_delay == 0:
+                    self._send_momentary_active = True
+                self._send_ticks_delay -= 1
 
 # local variables:
 # tab-width: 4
