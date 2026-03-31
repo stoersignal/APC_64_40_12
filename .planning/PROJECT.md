@@ -1,8 +1,17 @@
-# APC40 Toggle/Momentary Button Behavior
+# APC40 Custom Control Surface
 
 ## What This Is
 
-A modification to the APC40 MIDI control surface script for Ableton Live that adds dual-behavior (toggle/momentary) to Solo and Mute buttons. Short press toggles state on/off; long press (~400ms threshold) acts as momentary — activating on press-down and reverting on release. Multi-track simultaneous holds work independently.
+A customized APC40 MIDI control surface script for Ableton Live with toggle/momentary dual-behavior on Solo, Mute, and Send buttons, plus expanded 16-parameter encoder control. Short press toggles state on/off; long press (~400ms threshold) acts as momentary.
+
+## Current Milestone: v1.1 16Macros
+
+**Goal:** Expand encoder control to 16 device parameters via Pan mode and add toggle/momentary to Send A/B/C buttons
+
+**Target features:**
+- Pan mode maps top 8 encoders to device parameters 1-8
+- Pan mode maps device encoders to device parameters 9-16
+- Send A/B/C per-track buttons get toggle/momentary dual-behavior (reuse v1.0 pattern)
 
 ## Core Value
 
@@ -30,7 +39,12 @@ Solo and Mute buttons must feel responsive and predictable — short taps toggle
 
 ### Active
 
-(None — v1.0 shipped)
+- [ ] Pan mode: top 8 encoders map to device parameters 1-8
+- [ ] Pan mode: device encoders map to device parameters 9-16
+- [ ] Send A button: toggle/momentary dual-behavior per track
+- [ ] Send B button: toggle/momentary dual-behavior per track
+- [ ] Send C button: toggle/momentary dual-behavior per track
+- [ ] Send toggle/momentary uses same ~400ms threshold and shift guards as Solo/Mute
 
 ### Out of Scope
 
@@ -84,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-31 after v1.0 milestone*
+*Last updated: 2026-03-31 after v1.1 milestone start*

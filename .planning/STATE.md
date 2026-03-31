@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: verifying
-stopped_at: Completed 03-01-PLAN.md
+milestone: v1.1
+milestone_name: 16Macros
+status: defining_requirements
+stopped_at: Milestone v1.1 started
 last_updated: "2026-03-31T15:14:02.562Z"
 last_activity: 2026-03-31
 progress:
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** Solo and Mute buttons must feel responsive and predictable — short taps toggle, longer holds act momentary, with LED feedback always reflecting the current real-time state.
-**Current focus:** Phase 03 — hardening
+**Current focus:** Milestone v1.1 — 16Macros
 
 ## Current Position
 
-Phase: 03
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-31
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-31 — Milestone v1.1 started
 
 Progress: [░░░░░░░░░░] 0%
 
