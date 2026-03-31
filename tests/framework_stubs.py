@@ -64,3 +64,35 @@ class SpecialChanStripStub:
             if self._ticks_delay == 0:
                 pass  # threshold action (fold track) -- not needed in tests
             self._ticks_delay -= 1
+
+
+class ParameterStub:
+    """Minimal device parameter stub."""
+
+    def __init__(self, name='param', value=0.5):
+        self.name = name
+        self.value = value
+        self._connected_to = None
+
+
+class EncoderStub:
+    """Minimal encoder stub — tracks connect_to / release_parameter calls."""
+
+    def __init__(self):
+        self._parameter = None
+
+    def connect_to(self, parameter):
+        self._parameter = parameter
+
+    def release_parameter(self):
+        self._parameter = None
+
+
+class DeviceStub:
+    """Minimal Live.Device stub with a configurable parameter list."""
+
+    def __init__(self, num_params=16):
+        # Index 0 is always the device on/off parameter (ignored by bank mapping)
+        self.parameters = [ParameterStub(f'param_{i}', 0.5) for i in range(num_params + 1)]
+        self.class_name = 'InstrumentRack'
+        self.name = 'TestDevice'
