@@ -9,18 +9,18 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Core Behavior
 
-- [ ] **CORE-01**: Short press (<400ms) on Solo button toggles solo state on/off
-- [ ] **CORE-02**: Long press (>=400ms) on Solo button acts momentary — solo activates on press-down, reverts on release
-- [ ] **CORE-03**: Short press (<400ms) on Mute button toggles mute state on/off
-- [ ] **CORE-04**: Long press (>=400ms) on Mute button acts momentary — mute activates on press-down, reverts on release
-- [ ] **CORE-05**: State change fires immediately at press-down (no classification delay)
-- [ ] **CORE-06**: Long press on already-soloed track temporarily unsolos while held, restores on release
-- [ ] **CORE-07**: Long press on already-muted track temporarily unmutes while held, restores on release
+- [x] **CORE-01**: Short press (<400ms) on Solo button toggles solo state on/off
+- [x] **CORE-02**: Long press (>=400ms) on Solo button acts momentary — solo activates on press-down, reverts on release
+- [x] **CORE-03**: Short press (<400ms) on Mute button toggles mute state on/off
+- [x] **CORE-04**: Long press (>=400ms) on Mute button acts momentary — mute activates on press-down, reverts on release
+- [x] **CORE-05**: State change fires immediately at press-down (no classification delay)
+- [x] **CORE-06**: Long press on already-soloed track temporarily unsolos while held, restores on release
+- [x] **CORE-07**: Long press on already-muted track temporarily unmutes while held, restores on release
 
 ### LED Feedback
 
-- [ ] **LED-01**: Solo button LED reflects real-time solo state during momentary holds
-- [ ] **LED-02**: Mute button LED reflects real-time mute state during momentary holds
+- [x] **LED-01**: Solo button LED reflects real-time solo state during momentary holds
+- [x] **LED-02**: Mute button LED reflects real-time mute state during momentary holds
 
 ### Multi-Track
 
@@ -30,7 +30,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Integration
 
-- [ ] **INTG-01**: Existing toggle behavior preserved for short presses (no regression)
+- [x] **INTG-01**: Existing toggle behavior preserved for short presses (no regression)
 - [x] **INTG-02**: Timer callback properly cleaned up on disconnect (no phantom callbacks)
 - [x] **INTG-03**: Script loads and initializes without errors after modification
 
@@ -61,19 +61,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | Phase 2 | Pending |
-| CORE-02 | Phase 2 | Pending |
-| CORE-03 | Phase 2 | Pending |
-| CORE-04 | Phase 2 | Pending |
-| CORE-05 | Phase 2 | Pending |
-| CORE-06 | Phase 2 | Pending |
-| CORE-07 | Phase 2 | Pending |
-| LED-01 | Phase 2 | Pending |
-| LED-02 | Phase 2 | Pending |
+| CORE-01 | Phase 2 | Complete |
+| CORE-02 | Phase 2 | Complete |
+| CORE-03 | Phase 2 | Complete |
+| CORE-04 | Phase 2 | Complete |
+| CORE-05 | Phase 2 | Complete |
+| CORE-06 | Phase 2 | Complete |
+| CORE-07 | Phase 2 | Complete |
+| LED-01 | Phase 2 | Complete |
+| LED-02 | Phase 2 | Complete |
 | MULTI-01 | Phase 3 | Pending |
 | MULTI-02 | Phase 3 | Pending |
 | MULTI-03 | Phase 3 | Pending |
-| INTG-01 | Phase 2 | Pending |
+| INTG-01 | Phase 2 | Complete |
 | INTG-02 | Phase 1 | Complete |
 | INTG-03 | Phase 1 | Complete |
 

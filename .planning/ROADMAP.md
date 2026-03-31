@@ -44,7 +44,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 02-01-PLAN.md — Implement toggle/momentary state machine, shift guards, and timer countdown
+- [x] 02-01-PLAN.md — Implement toggle/momentary state machine, shift guards, and timer countdown
 
 ### Phase 3: Hardening
 **Goal**: The feature works reliably under simultaneous multi-track holds and edge cases encountered in live performance: rapid presses, shift pressed mid-hold, exclusive-solo propagation, and component disable mid-press

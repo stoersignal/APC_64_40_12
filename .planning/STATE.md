@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-31T11:51:18.775Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-31T12:11:24.952Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
   percent: 0
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** Solo and Mute buttons must feel responsive and predictable — short taps toggle, longer holds act momentary, with LED feedback always reflecting the current real-time state.
-**Current focus:** Phase 01 — scaffolding
+**Current focus:** Phase 02 — core-logic
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
+Phase: 02 (core-logic) — EXECUTING
+Plan: 1 of 1
 Status: Phase complete — ready for verification
 Last activity: 2026-03-31
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01-scaffolding P01 | 5min | 2 tasks | 2 files |
+| Phase 02-core-logic P01 | 4min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,9 @@ Recent decisions affecting current work:
 - Init: Solo and Mute only — Track Activator excluded from v1 scope
 - [Phase 01-scaffolding]: No _register_timer_callback in subclass — Python virtual dispatch handles timer routing without double-registration (D-04)
 - [Phase 01-scaffolding]: LONG_PRESS_DELAY = 4 at module level (4 ticks x 100ms = 400ms) — mirrors TRACK_FOLD_DELAY pattern (D-06)
+- [Phase 02-core-logic]: Exclusive solo tradeoff: _solo_value writes self._track.solo directly, bypassing exclusive-solo propagation — acceptable for toggle/momentary timing focus; revisit in Phase 3 if regression observed
+- [Phase 02-core-logic]: _shift_pressed attribute confirmed accessible in subclass — STATE.md blocker resolved; no additional wiring needed
+- [Phase 02-core-logic]: getattr/setattr DRY helper pattern established: _handle_toggle_momentary serves both solo and mute via attribute names as parameters
 
 ### Pending Todos
 
@@ -77,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T11:51:18.772Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-core-logic/02-CONTEXT.md
+Last session: 2026-03-31T12:11:24.948Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None
