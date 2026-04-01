@@ -252,7 +252,7 @@ class APC_64_40_9(APC):
         transport.set_undo_button(nudge_down_button)
         transport.set_redo_button(nudge_up_button)
         transport.set_tap_tempo_button(tap_tempo_button)
-        self._device.set_lock_button(tap_tempo_button)
+        transport.set_device_component(self._device)
         transport.set_quant_toggle_button(self._device_bank_buttons[5])
         transport.set_overdub_button(self._device_bank_buttons[6])
         transport.set_metronome_button(self._device_bank_buttons[7])

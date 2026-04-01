@@ -32,6 +32,7 @@ class ShiftableTransportComponent(CustomTransportComponent):
         self._ramp_edit_active = False  # True while Shift+Tap Tempo is held
         self._ramp_edit_touched = False  # True if encoders were turned during ramp edit
         self._ramp_encoders = None  # tuple of top 8 encoders, set via setter
+        self._device_component = None  # ShiftableDeviceComponent for lock-to-device
         self._ramp_encoder_listeners = []  # active listeners during ramp edit
         # Ramp interpolation state
         self._ramp_active = False  # True during active ramp interpolation
@@ -73,6 +74,9 @@ class ShiftableTransportComponent(CustomTransportComponent):
 
     def set_ramp_encoders(self, encoders):
         self._ramp_encoders = encoders
+
+    def set_device_component(self, device_component):
+        self._device_component = device_component
 
     def set_shift_button(self, button):
         if not(button == None or isinstance(button, ButtonElement) and button.is_momentary()):
@@ -138,7 +142,14 @@ class ShiftableTransportComponent(CustomTransportComponent):
                 device.selected_variation_index = new_index
 
     def _nudge_down_value(self, value):
-        if self.is_enabled() and (value != 0):
+        if not self.is_enabled() or value == 0:
+            return
+        if self._shift_pressed:
+            # Shift+Nudge Back: toggle lock-to-device
+            device = self.song().appointed_device
+            if device is not None:
+                self._device_component.set_lock_to_device(not self._device_component._locked_to_device, device)
+        else:
             device = self.song().appointed_device
             if device is not None and hasattr(device, 'variation_count') and device.variation_count > 0:
                 new_index = max(device.selected_variation_index - 1, 0)
