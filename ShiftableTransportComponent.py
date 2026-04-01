@@ -30,6 +30,7 @@ class ShiftableTransportComponent(CustomTransportComponent):
         self._ramp_beat_index = -1  # index into BEAT_SYNC_VALUES (-1 = not synced)
         self._ramp_mode = 'ms'  # 'ms' or 'beats' — last touched wins
         self._ramp_edit_active = False  # True while Shift+Tap Tempo is held
+        self._ramp_edit_touched = False  # True if encoders were turned during ramp edit
         self._ramp_encoders = None  # tuple of top 8 encoders, set via setter
         self._ramp_encoder_listeners = []  # active listeners during ramp edit
         # Ramp interpolation state
@@ -148,12 +149,14 @@ class ShiftableTransportComponent(CustomTransportComponent):
         if self._shift_pressed:
             if value != 0:
                 # Shift+Tap Tempo press: enter ramp edit mode
+                self._ramp_edit_touched = False
                 self._enter_ramp_edit()
             else:
-                # Shift+Tap Tempo release: save variation and exit ramp edit
-                device = self.song().appointed_device
-                if device is not None and hasattr(device, 'store_variation'):
-                    device.store_variation()
+                # Shift+Tap Tempo release: save variation only if encoders weren't touched
+                if not self._ramp_edit_touched:
+                    device = self.song().appointed_device
+                    if device is not None and hasattr(device, 'store_variation'):
+                        device.store_variation()
                 self._exit_ramp_edit()
         else:
             if value != 0:
@@ -306,6 +309,7 @@ class ShiftableTransportComponent(CustomTransportComponent):
         self._ramp_encoder_listeners = []
 
     def _ramp_ms_encoder_value(self, value):
+        self._ramp_edit_touched = True
         # Relative encoder: value < 64 = increment, >= 64 = decrement
         if value >= 64:
             amount = value - 128
@@ -317,6 +321,7 @@ class ShiftableTransportComponent(CustomTransportComponent):
         self._show_ramp_status()
 
     def _ramp_beats_encoder_value(self, value):
+        self._ramp_edit_touched = True
         if value >= 64:
             direction = -1
         else:
