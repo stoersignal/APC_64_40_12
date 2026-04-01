@@ -40,6 +40,7 @@ class ShiftableTransportComponent(CustomTransportComponent):
         self._ramp_ticks_total = 0  # total ticks for ramp duration
         self._ramp_ticks_remaining = 0  # countdown
         self._ramp_device = None  # device being ramped
+        self._ramp_macros = None  # cached macro parameter list during ramp
         self._register_timer_callback(self._on_ramp_timer)
         return None
 
@@ -350,11 +351,20 @@ class ShiftableTransportComponent(CustomTransportComponent):
             return beats * ms_per_beat
         return float(self._ramp_ms)
 
+    def _get_macro_parameters(self, device):
+        # Rack device parameters: index 0 = Device On, indices 1+ = macros
+        # Use all parameters except Device On — works regardless of user-renamed macros
+        if device is not None and hasattr(device, 'visible_macro_count'):
+            count = device.visible_macro_count
+            if count > 0:
+                return list(device.parameters[1:count + 1])
+        return []
+
     def _recall_with_ramp(self):
         device = self.song().appointed_device
         if device is None or not hasattr(device, 'recall_selected_variation'):
             return
-        if device.variation_count == 0:
+        if not hasattr(device, 'variation_count') or device.variation_count == 0:
             return
 
         ramp_ms = self._get_ramp_duration_ms()
@@ -363,17 +373,26 @@ class ShiftableTransportComponent(CustomTransportComponent):
             device.recall_selected_variation()
             return
 
-        # Capture current macro values before recall
-        macros = [p for p in device.parameters if p.name.startswith('Macro')]
+        macros = self._get_macro_parameters(device)
         if not macros:
             device.recall_selected_variation()
             return
 
+        # Capture current values before recall
         start_values = [p.value for p in macros]
 
         # Recall to get target values
         device.recall_selected_variation()
         target_values = [p.value for p in macros]
+
+        # Check if anything actually changed
+        needs_ramp = False
+        for i in range(len(start_values)):
+            if abs(start_values[i] - target_values[i]) > 0.001:
+                needs_ramp = True
+                break
+        if not needs_ramp:
+            return
 
         # Restore start values — we'll interpolate from here
         for i, p in enumerate(macros):
@@ -381,35 +400,37 @@ class ShiftableTransportComponent(CustomTransportComponent):
 
         # Set up ramp interpolation
         self._ramp_device = device
+        self._ramp_macros = macros
         self._ramp_start_values = start_values
         self._ramp_target_values = target_values
         ticks = max(1, int(ramp_ms / (RAMP_TIMER_INTERVAL * 1000)))
         self._ramp_ticks_total = ticks
         self._ramp_ticks_remaining = ticks
         self._ramp_active = True
+        self._show_msg_callback('Ramping ' + str(int(ramp_ms)) + 'ms')
 
     def _on_ramp_timer(self):
         if not self._ramp_active:
             return
-        if self._ramp_device is None:
+        if self._ramp_device is None or self._ramp_macros is None:
             self._ramp_active = False
             return
 
         self._ramp_ticks_remaining -= 1
-        macros = [p for p in self._ramp_device.parameters if p.name.startswith('Macro')]
 
         if self._ramp_ticks_remaining <= 0:
             # Final tick: set exact target values
-            for i, p in enumerate(macros):
+            for i, p in enumerate(self._ramp_macros):
                 if i < len(self._ramp_target_values):
                     p.value = self._ramp_target_values[i]
             self._ramp_active = False
             self._ramp_device = None
+            self._ramp_macros = None
             return
 
         # Interpolate: linear ramp
         progress = 1.0 - (float(self._ramp_ticks_remaining) / float(self._ramp_ticks_total))
-        for i, p in enumerate(macros):
+        for i, p in enumerate(self._ramp_macros):
             if i < len(self._ramp_start_values) and i < len(self._ramp_target_values):
                 start = self._ramp_start_values[i]
                 target = self._ramp_target_values[i]
