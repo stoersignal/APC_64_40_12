@@ -311,24 +311,18 @@ class ShiftableTransportComponent(CustomTransportComponent):
 
     def _ramp_ms_encoder_value(self, value):
         self._ramp_edit_touched = True
-        # Relative encoder: value < 64 = increment, >= 64 = decrement
-        if value >= 64:
-            amount = value - 128
-        else:
-            amount = value
-        # Step size: 50ms per click
-        self._ramp_ms = max(0, min(10000, self._ramp_ms + (amount * 50)))
+        # Absolute encoder: 0-127 maps to 0-10000ms
+        self._ramp_ms = int((value / 127.0) * 10000)
         self._ramp_mode = 'ms'
         self._show_ramp_status()
 
     def _ramp_beats_encoder_value(self, value):
         self._ramp_edit_touched = True
-        if value >= 64:
-            direction = -1
-        else:
-            direction = 1
-        new_index = self._ramp_beat_index + direction
-        new_index = max(-1, min(len(BEAT_SYNC_VALUES) - 1, new_index))
+        # Absolute encoder: 0-127 maps to beat sync index (-1 to 7)
+        # -1 = off, 0-7 = BEAT_SYNC_VALUES entries
+        num_steps = len(BEAT_SYNC_VALUES)  # 8
+        new_index = int((value / 127.0) * num_steps) - 1
+        new_index = max(-1, min(num_steps - 1, new_index))
         self._ramp_beat_index = new_index
         self._ramp_mode = 'beats'
         self._show_ramp_status()
