@@ -229,8 +229,9 @@ class APC_64_40_9(APC):
         detail_view_toggler.set_device_clip_toggle_button(self._device_bank_buttons[0])
         detail_view_toggler.set_detail_toggle_button(self._device_bank_buttons[4])
         detail_view_toggler.set_device_nav_buttons(self._device_bank_buttons[2], self._device_bank_buttons[3])
-        transport = ShiftableTransportComponent()
-        transport.name = 'Transport'
+        self._transport = ShiftableTransportComponent()
+        self._transport.name = 'Transport'
+        transport = self._transport
         play_button = ButtonElement(is_momentary, MIDI_NOTE_TYPE, 0, 91)
         stop_button = ButtonElement(is_momentary, MIDI_NOTE_TYPE, 0, 92)
         record_button = ButtonElement(is_momentary, MIDI_NOTE_TYPE, 0, 93)
@@ -300,6 +301,8 @@ class APC_64_40_9(APC):
             bank_nav_buttons=(self._device_bank_buttons[2], self._device_bank_buttons[3])
         )
         self._encoder_modes.set_controls(tuple(self._global_param_controls))
+        # Wire top encoders to transport for ramp time editing during Shift+Tap Tempo hold
+        self._transport.set_ramp_encoders(tuple(self._global_param_controls))
         self._encoder_device_modes = EncoderDeviceComponent(self._mixer, self._device, self)
         self._encoder_device_modes.name = 'Alt_Device_Control_Modes'
         self._encoder_eq_modes = EncoderEQComponent(self._mixer, self)

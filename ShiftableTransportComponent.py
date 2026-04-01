@@ -6,6 +6,11 @@ from .CustomTransportComponent import CustomTransportComponent
 from _Framework.ButtonElement import ButtonElement
 from _Framework.EncoderElement import EncoderElement
 
+# Beat sync values in beats (quarter notes). 1 bar = 4 beats.
+BEAT_SYNC_VALUES = (0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0)
+BEAT_SYNC_LABELS = ('1/16', '1/8', '1/4', '1/2', '1 bar', '2 bars', '4 bars', '8 bars')
+RAMP_TIMER_INTERVAL = 0.1  # 100ms per tick, same as framework timer
+
 class ShiftableTransportComponent(CustomTransportComponent):
     __doc__ = ' CustomTransportComponent that only uses certain buttons if a shift button is pressed '
     def __init__(self):
@@ -16,13 +21,32 @@ class ShiftableTransportComponent(CustomTransportComponent):
         self._last_quant_value = Live.Song.RecordingQuantization.rec_q_eight
         self.song().add_midi_recording_quantization_listener(self._on_quantisation_changed)
         self._on_quantisation_changed()
-        self._undo_button = None 
-        self._redo_button = None 
-        self._bts_button = None 
+        self._undo_button = None
+        self._redo_button = None
+        self._bts_button = None
         self._tempo_encoder_control = None
+        # Ramp state for variation recall
+        self._ramp_ms = 0  # ramp time in milliseconds (0 = instant)
+        self._ramp_beat_index = -1  # index into BEAT_SYNC_VALUES (-1 = not synced)
+        self._ramp_mode = 'ms'  # 'ms' or 'beats' — last touched wins
+        self._ramp_edit_active = False  # True while Shift+Tap Tempo is held
+        self._ramp_encoders = None  # tuple of top 8 encoders, set via setter
+        self._ramp_encoder_listeners = []  # active listeners during ramp edit
+        # Ramp interpolation state
+        self._ramp_active = False  # True during active ramp interpolation
+        self._ramp_start_values = []  # macro values at ramp start
+        self._ramp_target_values = []  # macro values to ramp toward
+        self._ramp_ticks_total = 0  # total ticks for ramp duration
+        self._ramp_ticks_remaining = 0  # countdown
+        self._ramp_device = None  # device being ramped
+        self._register_timer_callback(self._on_ramp_timer)
         return None
 
     def disconnect(self):
+        self._exit_ramp_edit()
+        self._ramp_active = False
+        self._unregister_timer_callback(self._on_ramp_timer)
+        self._ramp_encoders = None
         CustomTransportComponent.disconnect(self)
         if self._shift_button != None:
             self._shift_button.remove_value_listener(self._shift_value)
@@ -31,19 +55,22 @@ class ShiftableTransportComponent(CustomTransportComponent):
             self._quant_toggle_button.remove_value_listener(self._quant_toggle_value)
             self._quant_toggle_button = None
         self.song().remove_midi_recording_quantization_listener(self._on_quantisation_changed)
-        if (self._undo_button != None): 
+        if (self._undo_button != None):
             self._undo_button.remove_value_listener(self._undo_value)
             self._undo_button = None
-        if (self._redo_button != None): 
+        if (self._redo_button != None):
             self._redo_button.remove_value_listener(self._redo_value)
             self._redo_button = None
-        if (self._bts_button != None): 
+        if (self._bts_button != None):
             self._bts_button.remove_value_listener(self._bts_value)
             self._bts_button = None
         if (self._tempo_encoder_control != None):
             self._tempo_encoder_control.remove_value_listener(self._tempo_encoder_value)
             self._tempo_encoder_control = None
         return None
+
+    def set_ramp_encoders(self, encoders):
+        self._ramp_encoders = encoders
 
     def set_shift_button(self, button):
         if not(button == None or isinstance(button, ButtonElement) and button.is_momentary()):
@@ -116,13 +143,22 @@ class ShiftableTransportComponent(CustomTransportComponent):
                 device.selected_variation_index = new_index
 
     def _tap_tempo_value(self, value):
-        if self.is_enabled() and (value != 0):
-            device = self.song().appointed_device
-            if device is not None and hasattr(device, 'recall_selected_variation'):
-                if self._shift_pressed:
+        if not self.is_enabled():
+            return
+        if self._shift_pressed:
+            if value != 0:
+                # Shift+Tap Tempo press: enter ramp edit mode
+                self._enter_ramp_edit()
+            else:
+                # Shift+Tap Tempo release: save variation and exit ramp edit
+                device = self.song().appointed_device
+                if device is not None and hasattr(device, 'store_variation'):
                     device.store_variation()
-                else:
-                    device.recall_selected_variation()
+                self._exit_ramp_edit()
+        else:
+            if value != 0:
+                # Tap Tempo press: recall with ramp
+                self._recall_with_ramp()
 
 
     def _quant_toggle_value(self, value):
@@ -238,6 +274,142 @@ class ShiftableTransportComponent(CustomTransportComponent):
                 self.song().current_song_time = 0.0
      
         
+    # --- Ramp edit mode (Shift+Tap Tempo held) ---
+
+    def _enter_ramp_edit(self):
+        if self._ramp_edit_active:
+            return
+        self._ramp_edit_active = True
+        if self._ramp_encoders is not None and len(self._ramp_encoders) >= 2:
+            # Temporarily listen to encoder 1 (ms) and encoder 2 (beats)
+            enc_ms = self._ramp_encoders[0]
+            enc_beats = self._ramp_encoders[1]
+            enc_ms.add_value_listener(self._ramp_ms_encoder_value)
+            enc_beats.add_value_listener(self._ramp_beats_encoder_value)
+            self._ramp_encoder_listeners = [enc_ms, enc_beats]
+        self._show_ramp_status()
+
+    def _exit_ramp_edit(self):
+        if not self._ramp_edit_active:
+            return
+        self._ramp_edit_active = False
+        for enc in self._ramp_encoder_listeners:
+            if enc is not None:
+                try:
+                    enc.remove_value_listener(self._ramp_ms_encoder_value)
+                except:
+                    pass
+                try:
+                    enc.remove_value_listener(self._ramp_beats_encoder_value)
+                except:
+                    pass
+        self._ramp_encoder_listeners = []
+
+    def _ramp_ms_encoder_value(self, value):
+        # Relative encoder: value < 64 = increment, >= 64 = decrement
+        if value >= 64:
+            amount = value - 128
+        else:
+            amount = value
+        # Step size: 50ms per click
+        self._ramp_ms = max(0, min(10000, self._ramp_ms + (amount * 50)))
+        self._ramp_mode = 'ms'
+        self._show_ramp_status()
+
+    def _ramp_beats_encoder_value(self, value):
+        if value >= 64:
+            direction = -1
+        else:
+            direction = 1
+        new_index = self._ramp_beat_index + direction
+        new_index = max(-1, min(len(BEAT_SYNC_VALUES) - 1, new_index))
+        self._ramp_beat_index = new_index
+        self._ramp_mode = 'beats'
+        self._show_ramp_status()
+
+    def _show_ramp_status(self):
+        if self._ramp_mode == 'beats' and self._ramp_beat_index >= 0:
+            label = BEAT_SYNC_LABELS[self._ramp_beat_index]
+            self._show_msg_callback('Ramp: ' + label)
+        else:
+            self._show_msg_callback('Ramp: ' + str(self._ramp_ms) + 'ms')
+
+    # --- Ramped variation recall ---
+
+    def _get_ramp_duration_ms(self):
+        if self._ramp_mode == 'beats' and self._ramp_beat_index >= 0:
+            # Convert beats to ms using current tempo
+            beats = BEAT_SYNC_VALUES[self._ramp_beat_index]
+            bpm = self.song().tempo
+            ms_per_beat = 60000.0 / bpm
+            return beats * ms_per_beat
+        return float(self._ramp_ms)
+
+    def _recall_with_ramp(self):
+        device = self.song().appointed_device
+        if device is None or not hasattr(device, 'recall_selected_variation'):
+            return
+        if device.variation_count == 0:
+            return
+
+        ramp_ms = self._get_ramp_duration_ms()
+        if ramp_ms <= 0:
+            # Instant recall
+            device.recall_selected_variation()
+            return
+
+        # Capture current macro values before recall
+        macros = [p for p in device.parameters if p.name.startswith('Macro')]
+        if not macros:
+            device.recall_selected_variation()
+            return
+
+        start_values = [p.value for p in macros]
+
+        # Recall to get target values
+        device.recall_selected_variation()
+        target_values = [p.value for p in macros]
+
+        # Restore start values — we'll interpolate from here
+        for i, p in enumerate(macros):
+            p.value = start_values[i]
+
+        # Set up ramp interpolation
+        self._ramp_device = device
+        self._ramp_start_values = start_values
+        self._ramp_target_values = target_values
+        ticks = max(1, int(ramp_ms / (RAMP_TIMER_INTERVAL * 1000)))
+        self._ramp_ticks_total = ticks
+        self._ramp_ticks_remaining = ticks
+        self._ramp_active = True
+
+    def _on_ramp_timer(self):
+        if not self._ramp_active:
+            return
+        if self._ramp_device is None:
+            self._ramp_active = False
+            return
+
+        self._ramp_ticks_remaining -= 1
+        macros = [p for p in self._ramp_device.parameters if p.name.startswith('Macro')]
+
+        if self._ramp_ticks_remaining <= 0:
+            # Final tick: set exact target values
+            for i, p in enumerate(macros):
+                if i < len(self._ramp_target_values):
+                    p.value = self._ramp_target_values[i]
+            self._ramp_active = False
+            self._ramp_device = None
+            return
+
+        # Interpolate: linear ramp
+        progress = 1.0 - (float(self._ramp_ticks_remaining) / float(self._ramp_ticks_total))
+        for i, p in enumerate(macros):
+            if i < len(self._ramp_start_values) and i < len(self._ramp_target_values):
+                start = self._ramp_start_values[i]
+                target = self._ramp_target_values[i]
+                p.value = start + (target - start) * progress
+
     def _tempo_encoder_value(self, value):
         if self._shift_pressed:
             assert (self._tempo_encoder_control != None)
