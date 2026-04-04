@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-03-31T22:26:31.520Z",
+  "timestamp": "2026-04-04T17:22:58.619Z",
   "phase": null,
   "phase_name": null,
   "phase_dir": null,
@@ -19,6 +19,6 @@
     {"decision": "Send long-press always reverts to Pan (mode 0)", "rationale": "Simpler than tracking previous mode", "phase": "5"}
   ],
   "uncommitted_files": [],
-  "next_action": "Start next milestone with /gsd:new-milestone",
-  "context_notes": "v1.0 and v1.1 both shipped and verified in Ableton Live. 80 tests passing. All features working: Solo/Mute toggle/momentary, 16-param encoder mapping in Pan mode, Send A/B/C toggle/momentary. Ready for next milestone."
+  "next_action": "Start next milestone with /gsd:new-milestone. Domain expertise skill for Ableton Live scripting is now available at ~/.claude/skills/expertise/ableton-live-scripting/",
+  "context_notes": "v1.0 and v1.1 both shipped and verified. 80 tests passing. This session created a comprehensive domain expertise skill (21 files, 4098 lines) covering _Framework API, Live API, MIDI communication, components, elements, listeners, LED feedback, mode/shift patterns, device parameter mapping, deployment/debugging, modern API (v2/v3), advanced patterns (ClyphX, ZCX, raw MIDI), and anti-patterns. Skill sourced from 7 codebases."
 }
