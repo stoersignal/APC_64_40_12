@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: 16Macros
-status: verifying
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-03-31T22:24:51.573Z"
-last_activity: 2026-03-31
+milestone: v1.2
+milestone_name: Documentation
+status: ready-to-execute
+stopped_at: Phase 6 planned — 8 plans in 5 waves, ready for /gsd-execute-phase 6
+last_updated: "2026-05-02T08:45:00.000Z"
+last_activity: 2026-05-02
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 8
+  completed_plans: 0
   percent: 0
 ---
 
@@ -18,19 +18,32 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-31)
+See: .planning/PROJECT.md (updated 2026-05-02)
 
-**Core value:** Solo and Mute buttons must feel responsive and predictable — short taps toggle, longer holds act momentary, with LED feedback always reflecting the current real-time state.
-**Current focus:** Phase 05 — toggle-momentary-send-mode-buttons
+**Core value:** Users can install, configure, and operate every shipped controller feature without reading source code.
+**Current focus:** Phase 6 — Create user manual
 
 ## Current Position
 
-Phase: 05
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-03-31
+Milestone: v1.2 Documentation — **ready to execute** (planned 2026-05-02)
+Phase: 6 (Create user manual)
+Plan: 8 plans in 5 waves — verified by gsd-plan-checker (iteration 2/3 passed all gates)
+Status: Planning complete; ready for `/gsd-execute-phase 6`
+Last activity: 2026-05-02 — Phase 6 planned via /gsd-plan-phase (PATTERNS + 8 PLAN.md files committed; 1 BLOCKER + 5 WARNINGS resolved in revision iteration 1)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [░░░░░░░░░░] 0% of v1.2
+
+### v1.2 feature surface to document
+
+Already shipped, now in scope for the manual:
+
+- v1.0 — Solo/Mute toggle/momentary state machine (LONG_PRESS_DELAY=4)
+- v1.1 — 16-macro Pan mode (top + device encoders, ring LED feedback)
+- v1.1 — Send A/B/C toggle/momentary mode switching
+- v1.2 — Rack macro snapshot save/recall via Tap Tempo + Nudge (734e357)
+- v1.2 — Ramp encoders for snapshot variation recall (fd27e58, e95a034, 7a55453, c6b836e)
+- v1.2 — Lock-to-device relocated to Shift+Nudge Back (442f099)
+- v1.2 — Domain expertise skill at `~/.claude/skills/expertise/ableton-live-scripting/` (77f0ef9, reference material, not user-facing)
 
 ## Performance Metrics
 
@@ -91,6 +104,13 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T21:53:22.179Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-05-02T08:45:00.000Z
+Stopped at: Phase 6 planning complete — 8 PLAN.md files in .planning/phases/06-create-user-manual/, ROADMAP.md annotated with wave dependencies, all 10 DOC-NN requirements + 18 D-NN decisions covered (or correctly OOS)
 Resume file: None
+Next action: `/clear` then `/gsd-execute-phase 6`
+
+### Scaffold caveats
+
+- `gsd-sdk` is v0.1.0 — none of the workflow's `query` handlers (state.milestone-switch, init.new-milestone, commit, phases.clear, agent-skills) exist. Files written via Edit/Write directly.
+- No subagents spawned — gsd-project-researcher and gsd-roadmapper were skipped. Documentation milestone doesn't need them, but a future feature milestone will require either an SDK upgrade or manual roadmapping again.
+- No commit made — the .planning/phases/* deletions and untracked .py files are unresolved (separate index/case-sensitivity issue flagged in `/gsd-health`). Commit v1.2 scaffold separately once the working tree is reconciled.
