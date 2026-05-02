@@ -147,6 +147,50 @@
 
         .pad:hover {
             filter: brightness(1.2);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 18px var(--glow-cyan, rgba(56,189,248,0.18));
+        }
+
+        .pad:active {
+            transform: translateY(1px) scale(0.97);
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.55);
+            transition-duration: 60ms;
+        }
+
+        /* Spell 1 — boot-up cascade. Initial state set inline by bootCascade(),
+           class .booted triggers the settle. cubic-bezier overshoot gives the
+           "physical button popping into place" feel. */
+        .pad.booting {
+            opacity: 0;
+            transform: translateY(8px) scale(0.92);
+            transition: opacity 380ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                        transform 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .pad.booted {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        /* Spell 5 — idle ambient twinkle. Briefly scales + brightens then
+           releases. Triggered by JS picking a random .grid-pad on a 6s interval. */
+        @keyframes apc-twinkle {
+            0%   { transform: scale(1);   filter: brightness(1); }
+            45%  { transform: scale(1.08); filter: brightness(1.45) drop-shadow(0 0 12px rgba(56,189,248,0.5)); }
+            100% { transform: scale(1);   filter: brightness(1); }
+        }
+        .pad.twinkling {
+            animation: apc-twinkle 720ms ease-in-out;
+        }
+
+        /* Spell 6 — SHIFT triple-click "welcome" easter egg. Sweeps a soft
+           glow across all encoder rings + grid pads. */
+        @keyframes apc-welcome-sweep {
+            0%   { filter: brightness(1); box-shadow: 0 0 0 rgba(168,85,247,0); }
+            50%  { filter: brightness(1.6); box-shadow: 0 0 18px rgba(168,85,247,0.65); }
+            100% { filter: brightness(1); box-shadow: 0 0 0 rgba(168,85,247,0); }
+        }
+        .pad.welcome {
+            animation: apc-welcome-sweep 900ms ease-out;
         }
 
         /* APC40-specific pad region styles (Plan 02). */
@@ -249,6 +293,31 @@
             background: var(--glow-cyan);
             color: #000;
             box-shadow: 0 0 12px var(--glow-cyan);
+            animation: apc-mode-breathe 3.2s ease-in-out infinite alternate;
+        }
+
+        /* Spell 2 — active-mode breathing pulse. Tells the eye "this is alive"
+           without competing for attention. Box-shadow only — no layout shift. */
+        @keyframes apc-mode-breathe {
+            0%   { box-shadow: 0 0 12px var(--glow-cyan); }
+            100% { box-shadow: 0 0 22px var(--glow-cyan), 0 0 6px rgba(255,255,255,0.4) inset; }
+        }
+
+        /* Accessibility — respect prefers-reduced-motion. Disables all spell
+           animations + transitions for users who request reduced motion.
+           Static layout still works perfectly. */
+        @media (prefers-reduced-motion: reduce) {
+            .pad.booting, .pad.booted,
+            .pad.twinkling, .pad.welcome,
+            .mode-strip-btn.active,
+            #tooltip {
+                animation: none !important;
+                transition: opacity 80ms linear !important;
+                transform: none !important;
+            }
+            .pad:hover {
+                transform: none;
+            }
         }
 
         /* I-03/I-04 fix — Activator/Arm row: hardware-present but
@@ -298,7 +367,9 @@
             font-size: 1.2rem;
         }
 
-        /* Tooltip styles */
+        /* Tooltip styles — Spell 4: entrance overshoot.
+           Tooltip enters with scale + translateY, lands with cubic-bezier
+           overshoot so it feels physical rather than slid-in. */
         #tooltip {
             position: fixed;
             background: var(--tooltip-bg);
@@ -311,8 +382,10 @@
             line-height: 1.4;
             pointer-events: none;
             opacity: 0;
-            transform: translateY(10px);
-            transition: opacity 0.2s ease, transform 0.2s ease;
+            transform: translateY(8px) scale(0.94);
+            transform-origin: top left;
+            transition: opacity 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                        transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             z-index: 1000;
             backdrop-filter: blur(8px);
@@ -320,7 +393,7 @@
 
         #tooltip.visible {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateY(0) scale(1);
         }
 
         #tooltip strong {
@@ -1585,10 +1658,84 @@
         // Defensive removal of the Plan-01 placeholder pad (the HTML
         // element was already deleted in this plan, but if a future
         // editor reintroduces it the runtime will still clean it up).
+        // Spell 1 — boot-up cascade. Pads light up diagonal-by-diagonal from
+        // top-left, mimicking a real APC40 firmware boot. Stagger ordered by
+        // (data-row + data-col) for clip pads, fall-through index for everything
+        // else. Skips entirely when prefers-reduced-motion is set.
+        function bootCascade() {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const pads = Array.from(document.querySelectorAll('.device .pad'));
+            // Score each pad: clip-grid uses data-row + data-col; others fall back
+            // to a small jitter so the order stays interesting without being chaotic.
+            const scored = pads.map((el, i) => {
+                const r = parseInt(el.dataset.row, 10);
+                const c = parseInt(el.dataset.col, 10);
+                let score = i * 0.05;  // tiny tiebreak
+                if (Number.isFinite(r) && Number.isFinite(c)) score = r + c;
+                return { el, score };
+            }).sort((a, b) => a.score - b.score);
+            scored.forEach((p, i) => p.el.classList.add('booting'));
+            // Force a paint, then schedule the settle on a per-pad delay.
+            requestAnimationFrame(() => {
+                scored.forEach((p, i) => {
+                    setTimeout(() => p.el.classList.replace('booting', 'booted'), 18 * i);
+                });
+            });
+            // Strip the .booted class once the cascade settles so future hover
+            // transforms don't fight a transition that's already finished.
+            const total = 18 * scored.length + 420;
+            setTimeout(() => scored.forEach(p => p.el.classList.remove('booted')), total);
+        }
+
+        // Spell 5 — idle ambient twinkle. Picks a random clip-grid pad every
+        // ~6s and runs a single pulse. Pauses when the user is hovering any
+        // pad (so it doesn't fight with hover state).
+        function startIdleTwinkle() {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const pads = document.querySelectorAll('.grid-pad');
+            if (!pads.length) return;
+            let userIsHovering = false;
+            document.querySelector('.device').addEventListener('mouseenter', () => { userIsHovering = true; });
+            document.querySelector('.device').addEventListener('mouseleave', () => { userIsHovering = false; });
+            setInterval(() => {
+                if (userIsHovering || document.hidden) return;
+                const target = pads[Math.floor(Math.random() * pads.length)];
+                target.classList.add('twinkling');
+                setTimeout(() => target.classList.remove('twinkling'), 720);
+            }, 6000);
+        }
+
+        // Spell 6 — SHIFT triple-click easter egg. Sweeps a soft purple glow
+        // across every pad on the device. 3 clicks within 1.2s triggers it.
+        function wireWelcomeEasterEgg() {
+            const shiftBtn = document.getElementById('shift-button');
+            if (!shiftBtn) return;
+            let clicks = [];
+            shiftBtn.addEventListener('click', () => {
+                const now = Date.now();
+                clicks = clicks.filter(t => now - t < 1200);
+                clicks.push(now);
+                if (clicks.length >= 3) {
+                    clicks = [];
+                    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+                    const pads = Array.from(document.querySelectorAll('.device .pad'));
+                    pads.forEach((el, i) => {
+                        setTimeout(() => {
+                            el.classList.add('welcome');
+                            setTimeout(() => el.classList.remove('welcome'), 900);
+                        }, 12 * i);
+                    });
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const placeholder = document.getElementById('placeholder-pad');
             if (placeholder) placeholder.remove();
             buildLayout();
+            bootCascade();
+            startIdleTwinkle();
+            wireWelcomeEasterEgg();
 
             // Plan 03 — wire encoder-mode strip click handlers + initial
             // paint. Per D-04b, Pan is the rest state default.
