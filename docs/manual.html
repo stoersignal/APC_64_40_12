@@ -616,27 +616,42 @@
             });
 
             // Top encoders (rotaries) — Source: EncModeSelectorComponent.py:107-159.
+            // Plan 03 contentGetter indirection: re-evaluates encoderModeDefinitions
+            // [currentEncoderMode] on each hover so the tooltip reflects the active mode.
             document.querySelectorAll('.top-encoder').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
-                addTooltipEvents(el, () => `<strong>Top Encoder ${c + 1}</strong>Mapping depends on the active encoder mode (Plan 03 wires this).`);
+                addTooltipEvents(el, () => {
+                    const def = encoderModeDefinitions[currentEncoderMode];
+                    return def && def.topEncoderTip ? def.topEncoderTip(c) : '';
+                });
             });
 
-            // Top encoder ring LEDs.
+            // Top encoder ring LEDs — Plan 03 contentGetter indirection.
             document.querySelectorAll('.top-encoder-ring').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
-                addTooltipEvents(el, () => `<strong>Top Encoder ${c + 1} — Ring LED</strong>Reflects the parameter value bound by the current encoder mode.`);
+                addTooltipEvents(el, () => {
+                    const def = encoderModeDefinitions[currentEncoderMode];
+                    return def && def.ringTip ? def.ringTip(c) : '';
+                });
             });
 
             // Device encoders — Source: Pan16DeviceComponent.py 16-macro mapping.
+            // Plan 03 contentGetter indirection.
             document.querySelectorAll('.device-encoder').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
-                addTooltipEvents(el, () => `<strong>Device Encoder ${c + 1}</strong>Mapping depends on the active encoder mode (Plan 03 wires this).`);
+                addTooltipEvents(el, () => {
+                    const def = encoderModeDefinitions[currentEncoderMode];
+                    return def && def.deviceEncoderTip ? def.deviceEncoderTip(c) : '';
+                });
             });
 
-            // Device bank navigation (4 cells).
+            // Device bank navigation (4 cells) — Plan 03 contentGetter indirection.
             document.querySelectorAll('.device-bank-nav').forEach(el => {
-                const lbl = el.textContent;
-                addTooltipEvents(el, () => `<strong>${lbl}</strong>Device parameter bank / device navigation.`);
+                const i = parseInt(el.dataset.idx, 10);
+                addTooltipEvents(el, () => {
+                    const def = encoderModeDefinitions[currentEncoderMode];
+                    return def && def.bankNavTip ? def.bankNavTip(i) : '';
+                });
             });
 
             // Solo row (8 cells).
@@ -718,6 +733,130 @@
             }
         }
 
+        // ────────────────────────────────────────────────────────────────
+        // Plan 03 — Encoder mode wiring (D-04a, D-04b, D-05).
+        //
+        // encoderModeDefinitions: per-mode tooltip getters + paint colors.
+        // Source-of-truth citations in tooltip prose:
+        //   • Pan mode top/device encoders → Pan16DeviceComponent.py:30–42
+        //     (parameter_banks slices [1:17] into two 8-param chunks).
+        //   • Pan-mode bank-1 device encoders → Pan16DeviceComponent.py:17–28
+        //     (set_device override re-asserts _fixed_bank_index for bank-1
+        //      instance — two-instance bank isolation).
+        //   • Send A/B/C toggle/momentary → EncModeSelectorComponent.py:84–105
+        //     (_mode_value); LONG_PRESS_DELAY = 4 ticks × 100ms = 400ms
+        //      from EncModeSelectorComponent.py:9–10.
+        //   • User1/User2/User3 unmapped → EncModeSelectorComponent.py:80–81
+        //     (number_of_modes() == 4 only covers Pan + SendA + SendB + SendC).
+        //   • DOC-06 ramp tooltip references absolute 0–127 mapping over
+        //     visible_macro_count (ShiftableTransportComponent.py:362–366).
+        //
+        // Tooltips are getter closures that read currentEncoderMode at hover
+        // time — per PATTERNS section 1e (contentGetter indirection so
+        // tooltips re-evaluate on each hover and reflect the current mode).
+        // ────────────────────────────────────────────────────────────────
+        const encoderModeDefinitions = {
+            'Pan': {
+                desc: '16-macro mapping. Top encoders → Macro Rack parameters 1–8; device encoders → parameters 9–16. Per-track pan is disabled. Bank nav on device row only.',
+                topEncoderColor: '#3b82f6',
+                topEncoderTip: (c) => `<strong>Top Encoder ${c + 1} — Pan mode (Macro ${c + 1})</strong>Bound to <code>device.parameters[${c + 1}]</code> via Pan16DeviceComponent (bank 0). Ring LED reflects parameter value.<div class="related"><em>Source:</em> Pan16DeviceComponent.py:30–42 (parameter_banks slices [1:17]). <em>Ramp:</em> when this is a ramp-eligible encoder, absolute 0–127 mapping over <code>visible_macro_count</code> interpolates between variations (DOC-06).</div>`,
+                deviceEncoderColor: '#3b82f6',
+                deviceEncoderTip: (c) => `<strong>Device Encoder ${c + 1} — Pan mode (Macro ${c + 9})</strong>Bound to <code>device.parameters[${c + 9}]</code> via Pan16DeviceComponent (bank 1). Ring LED reflects parameter value.<div class="related"><em>Source:</em> Pan16DeviceComponent.py:17–28 (set_device override re-asserts _fixed_bank_index for bank-1 instance).</div>`,
+                bankNavTip: (i) => `<strong>${['◀ Bank', 'Bank ▶', '◀ Dev', 'Dev ▶'][i]}</strong>Device parameter bank / device navigation. Active in all encoder modes; only the device row carries bank nav (top row stays on Macros 1–8).`,
+                ringTip: (c) => `<strong>Top Encoder ${c + 1} Ring LED — Pan mode</strong>Reflects the value of Macro ${c + 1} on the appointed device. Updated on every parameter change.`,
+            },
+            'SendA': {
+                desc: 'Send A — top encoders adjust Send A level on each track. Short tap latches; hold ≥400ms acts momentary, reverts to Pan on release. Device encoders stay on Pan16 bank 1.',
+                topEncoderColor: '#10b981',
+                topEncoderTip: (c) => `<strong>Top Encoder ${c + 1} — Send A (Track ${c + 1})</strong>Adjusts Track ${c + 1}'s Send A level.<div class="related"><em>Mode change:</em> short-press the Send A button to latch; hold ≥400ms (4 ticks × 100ms) for momentary that reverts to Pan on release. Source: EncModeSelectorComponent.py:84–105 (_mode_value).</div>`,
+                deviceEncoderColor: '#3b82f6',
+                deviceEncoderTip: (c) => `<strong>Device Encoder ${c + 1} — Pan mode (Macro ${c + 9})</strong>Device encoders stay on Pan16 bank 1 even in Send modes. Bound to <code>device.parameters[${c + 9}]</code>.`,
+                bankNavTip: (i) => `<strong>${['◀ Bank', 'Bank ▶', '◀ Dev', 'Dev ▶'][i]}</strong>Device parameter bank / device navigation. Unchanged in Send modes.`,
+                ringTip: (c) => `<strong>Top Encoder ${c + 1} Ring LED — Send A</strong>Reflects Track ${c + 1}'s Send A level.`,
+            },
+            'SendB': {
+                desc: 'Send B — same toggle/momentary model as Send A. Top encoders adjust Send B per track.',
+                topEncoderColor: '#f59e0b',
+                topEncoderTip: (c) => `<strong>Top Encoder ${c + 1} — Send B (Track ${c + 1})</strong>Adjusts Track ${c + 1}'s Send B level.<div class="related"><em>Mode change:</em> identical model to Send A — Source: EncModeSelectorComponent.py:84–105.</div>`,
+                deviceEncoderColor: '#3b82f6',
+                deviceEncoderTip: (c) => `<strong>Device Encoder ${c + 1} — Pan mode (Macro ${c + 9})</strong>Device encoders stay on Pan16 bank 1.`,
+                bankNavTip: (i) => `<strong>${['◀ Bank', 'Bank ▶', '◀ Dev', 'Dev ▶'][i]}</strong>Device parameter bank / device navigation. Unchanged in Send modes.`,
+                ringTip: (c) => `<strong>Top Encoder ${c + 1} Ring LED — Send B</strong>Reflects Track ${c + 1}'s Send B level.`,
+            },
+            'SendC': {
+                desc: 'Send C — same toggle/momentary model as Send A.',
+                topEncoderColor: '#ef4444',
+                topEncoderTip: (c) => `<strong>Top Encoder ${c + 1} — Send C (Track ${c + 1})</strong>Adjusts Track ${c + 1}'s Send C level.<div class="related"><em>Mode change:</em> identical model to Send A — Source: EncModeSelectorComponent.py:84–105.</div>`,
+                deviceEncoderColor: '#3b82f6',
+                deviceEncoderTip: (c) => `<strong>Device Encoder ${c + 1} — Pan mode (Macro ${c + 9})</strong>Device encoders stay on Pan16 bank 1.`,
+                bankNavTip: (i) => `<strong>${['◀ Bank', 'Bank ▶', '◀ Dev', 'Dev ▶'][i]}</strong>Device parameter bank / device navigation.`,
+                ringTip: (c) => `<strong>Top Encoder ${c + 1} Ring LED — Send C</strong>Reflects Track ${c + 1}'s Send C level.`,
+            },
+            'User1': {
+                desc: 'User 1 — placeholder. The script wires only Pan / SendA / SendB / SendC (number_of_modes() == 4 in EncModeSelectorComponent.py:80–81). User1/User2/User3 buttons are present on the hardware but unmapped by this script.',
+                topEncoderColor: 'var(--pad-off)',
+                topEncoderTip: (c) => `<strong>Top Encoder ${c + 1} — User 1 (unmapped)</strong>The APC40 hardware exposes User1/User2/User3 mode buttons, but this script does not bind them. Pressing the User1 button has no effect; the encoders stay on whatever mapping was active before.<div class="related"><em>Source:</em> EncModeSelectorComponent.py:80–81 — number_of_modes() == 4 covers only Pan + SendA + SendB + SendC.</div>`,
+                deviceEncoderColor: 'var(--pad-off)',
+                deviceEncoderTip: (c) => `<strong>Device Encoder ${c + 1} — User 1 (unmapped)</strong>Same as top encoder: User1 is not mapped by the script.`,
+                bankNavTip: (i) => `<strong>${['◀ Bank', 'Bank ▶', '◀ Dev', 'Dev ▶'][i]}</strong>Device bank nav still works in User mode (it's mode-independent).`,
+                ringTip: (c) => `<strong>Top Encoder ${c + 1} Ring LED — User 1</strong>Inactive — User1 is unmapped.`,
+            },
+            'User2': {
+                desc: 'User 2 — placeholder, unmapped (same as User 1).',
+                topEncoderColor: 'var(--pad-off)',
+                topEncoderTip: (c) => `<strong>Top Encoder ${c + 1} — User 2 (unmapped)</strong>Not bound by this script. See User 1 for the rationale.`,
+                deviceEncoderColor: 'var(--pad-off)',
+                deviceEncoderTip: (c) => `<strong>Device Encoder ${c + 1} — User 2 (unmapped)</strong>Not bound by this script.`,
+                bankNavTip: (i) => `<strong>${['◀ Bank', 'Bank ▶', '◀ Dev', 'Dev ▶'][i]}</strong>Device bank nav unchanged.`,
+                ringTip: (c) => `<strong>Top Encoder ${c + 1} Ring LED — User 2</strong>Inactive.`,
+            },
+            'User3': {
+                desc: 'User 3 — placeholder, unmapped (same as User 1).',
+                topEncoderColor: 'var(--pad-off)',
+                topEncoderTip: (c) => `<strong>Top Encoder ${c + 1} — User 3 (unmapped)</strong>Not bound by this script.`,
+                deviceEncoderColor: 'var(--pad-off)',
+                deviceEncoderTip: (c) => `<strong>Device Encoder ${c + 1} — User 3 (unmapped)</strong>Not bound by this script.`,
+                bankNavTip: (i) => `<strong>${['◀ Bank', 'Bank ▶', '◀ Dev', 'Dev ▶'][i]}</strong>Device bank nav unchanged.`,
+                ringTip: (c) => `<strong>Top Encoder ${c + 1} Ring LED — User 3</strong>Inactive.`,
+            },
+        };
+
+        // Repaint encoder-mode strip + the 16 encoder pads + ring LEDs +
+        // legend description. Click handlers (wired below in DOMContentLoaded)
+        // call this; the placeholder tooltips on top/device/ring/bank-nav
+        // pads keep using contentGetter closures that read currentEncoderMode
+        // at hover-time (not at DOM-build time), so flipping currentEncoderMode
+        // here is sufficient — no need to re-attach tooltip handlers.
+        function setEncoderMode(modeId) {
+            const def = encoderModeDefinitions[modeId];
+            if (!def) return;
+            currentEncoderMode = modeId;
+
+            // Repaint mode-strip button highlight.
+            document.querySelectorAll('.encoder-mode-btn').forEach(btn => {
+                if (btn.dataset.mode === modeId) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Repaint top encoders.
+            document.querySelectorAll('.top-encoder').forEach(enc => {
+                enc.style.backgroundColor = def.topEncoderColor;
+            });
+            // Repaint device encoders.
+            document.querySelectorAll('.device-encoder').forEach(enc => {
+                enc.style.backgroundColor = def.deviceEncoderColor;
+            });
+
+            // Repaint legend description (#legend-desc populated by Plan 02).
+            const legend = document.getElementById('legend-desc');
+            if (legend) {
+                legend.innerHTML = `<strong>Encoder Mode:</strong> ${modeId} — ${def.desc}`;
+            }
+        }
+
         // Defensive removal of the Plan-01 placeholder pad (the HTML
         // element was already deleted in this plan, but if a future
         // editor reintroduces it the runtime will still clean it up).
@@ -725,6 +864,33 @@
             const placeholder = document.getElementById('placeholder-pad');
             if (placeholder) placeholder.remove();
             buildLayout();
+
+            // Plan 03 — wire encoder-mode strip click handlers + initial
+            // paint. Per D-04b, Pan is the rest state default.
+            document.querySelectorAll('.encoder-mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => setEncoderMode(btn.dataset.mode));
+            });
+
+            // Plan 03 — tooltips on the encoder-mode-strip buttons themselves.
+            // Same contentGetter indirection so the tooltip text reflects the
+            // mode-button being hovered (not the currently-active mode).
+            document.querySelectorAll('.encoder-mode-btn').forEach(btn => {
+                addTooltipEvents(btn, () => {
+                    const def = encoderModeDefinitions[btn.dataset.mode];
+                    if (!def) return '';
+                    let extra = '';
+                    if (btn.dataset.mode === 'Pan') {
+                        extra = '<div class="related"><em>Click again:</em> Default Pan mode is the rest state — no toggle revert.</div>';
+                    } else if (['SendA', 'SendB', 'SendC'].includes(btn.dataset.mode)) {
+                        extra = '<div class="related"><em>Toggle / Momentary:</em> short tap latches; hold ≥400ms acts momentary, reverts to Pan on release. Same model as Solo/Mute (DOC-03). Source: EncModeSelectorComponent.py:84–105.</div>';
+                    } else if (btn.dataset.mode.startsWith('User')) {
+                        extra = '<div class="related"><em>Unmapped:</em> User1/User2/User3 are not bound by this script. See EncModeSelectorComponent.py:80–81 (number_of_modes() == 4).</div>';
+                    }
+                    return `<strong>${btn.dataset.mode} Encoder Mode</strong>${def.desc}${extra}`;
+                });
+            });
+
+            setEncoderMode('Pan');  // initial paint per D-04b (default)
         });
     </script>
 
