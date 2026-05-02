@@ -44,7 +44,7 @@ Plans:
 - [x] 06-08-PLAN.md — README.md rewrite to thin pointer linking to docs/manual.html + docs/apc40-layout.svg + INSTALL.md + TROUBLESHOOTING.md (DOC-02) — touches README.md, depends on 06-01 + 06-06
 
 **Wave 4** *(blocked on Wave 3)*
-- [ ] 06-04-PLAN.md — Matrix mode strip: setMatrixMode() + matrixModeDefinitions for ClipLaunch/SessionOverview/NoteMode1-6/StepSequencer + Matrix_Maps.py format reference section (DOC-02, DOC-09, DOC-10) — touches docs/manual.html
+- [x] 06-04-PLAN.md — Matrix mode strip: setMatrixMode() + matrixModeDefinitions for ClipLaunch/SessionOverview/NoteMode1-6/StepSequencer + Matrix_Maps.py format reference section (DOC-02, DOC-09, DOC-10) — touches docs/manual.html
 
 **Wave 5** *(blocked on Wave 4)*
 - [ ] 06-05-PLAN.md — Modifier overlays: toggleModifierOverlay() for ShiftHeld + SaveMode + Solo/Mute toggle/momentary tooltips + Tap/Nudge/Shift transport tooltips (DOC-02, DOC-03, DOC-05, DOC-06, DOC-07) — touches docs/manual.html
