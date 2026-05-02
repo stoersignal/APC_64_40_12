@@ -40,8 +40,8 @@ Plans:
 - [x] 06-07-PLAN.md — INSTALL.md (Win+Mac walkthrough) + TROUBLESHOOTING.md (5 failure modes) (DOC-01, DOC-08) — touches docs/INSTALL.md + docs/TROUBLESHOOTING.md
 
 **Wave 3** *(blocked on Wave 2 — two parallel plans on disjoint files)*
-- [ ] 06-03-PLAN.md — Encoder mode strip: setEncoderMode() + encoderModeDefinitions for Pan/SendA/B/C/User1-3 + encoder/ring/bank-nav tooltips with line-traced source (DOC-02, DOC-03, DOC-04, DOC-06) — touches docs/manual.html
-- [ ] 06-08-PLAN.md — README.md rewrite to thin pointer linking to docs/manual.html + docs/apc40-layout.svg + INSTALL.md + TROUBLESHOOTING.md (DOC-02) — touches README.md, depends on 06-01 + 06-06
+- [x] 06-03-PLAN.md — Encoder mode strip: setEncoderMode() + encoderModeDefinitions for Pan/SendA/B/C/User1-3 + encoder/ring/bank-nav tooltips with line-traced source (DOC-02, DOC-03, DOC-04, DOC-06) — touches docs/manual.html
+- [x] 06-08-PLAN.md — README.md rewrite to thin pointer linking to docs/manual.html + docs/apc40-layout.svg + INSTALL.md + TROUBLESHOOTING.md (DOC-02) — touches README.md, depends on 06-01 + 06-06
 
 **Wave 4** *(blocked on Wave 3)*
 - [ ] 06-04-PLAN.md — Matrix mode strip: setMatrixMode() + matrixModeDefinitions for ClipLaunch/SessionOverview/NoteMode1-6/StepSequencer + Matrix_Maps.py format reference section (DOC-02, DOC-09, DOC-10) — touches docs/manual.html
