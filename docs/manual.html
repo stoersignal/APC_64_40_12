@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APC_64_40_11 — Interactive Controller Manual</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --apc-case: #1e293b;
+            --apc-border: #334155;
+            --pad-off: #334155;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --glow-cyan: #06b6d4;
+            --glow-magenta: #ec4899;
+            --glow-blue: #3b82f6;
+            --glow-green: #10b981;
+            --glow-yellow: #f59e0b;
+            --glow-red: #ef4444;
+            --glow-orange: #f97316;
+            --glow-purple: #a855f7;
+            --tooltip-bg: rgba(15, 23, 42, 0.95);
+            --tooltip-border: rgba(56, 189, 248, 0.5);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            margin: 0 0 0.5rem 0;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p {
+            color: var(--text-dim);
+            margin: 0;
+        }
+
+        .device {
+            background: var(--apc-case);
+            padding: 40px;
+            border-radius: 30px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--apc-border);
+            display: grid;
+            gap: 20px;
+            grid-template-areas:
+                ". t t t t t t t t ."
+                ". tx tx tx tx tx tx tx tx ."
+                "l g g g g g g g g r"
+                "l g g g g g g g g r"
+                "l g g g g g g g g r"
+                "l g g g g g g g g r"
+                "l g g g g g g g g r"
+                "l g g g g g g g g r"
+                "l g g g g g g g g r"
+                "l g g g g g g g g r"
+                ". b b b b b b b b ."
+                "s c c c c c c c c .";
+            position: relative;
+        }
+
+        .pad-group {
+            display: contents;
+        }
+
+        .pad {
+            background: var(--pad-off);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            width: 60px;
+            height: 60px;
+            color: white;
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.1), inset 0 -2px 4px rgba(0,0,0,0.3);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            word-break: break-word;
+            padding: 2px;
+            border: 1px solid rgba(0,0,0,0.3);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        /* Pad shapes */
+        .pad.rect-h { height: 35px; border-radius: 8px; }
+        .pad.rect-v { width: 60px; height: 60px; border-radius: 30px; } /* Circular/pill for sides */
+        .pad.circle { width: 60px; height: 60px; border-radius: 50%; }
+
+        /* Generic glows */
+        .pad.active {
+            transform: scale(0.95);
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .pad:hover {
+            filter: brightness(1.2);
+        }
+
+        /* Specific modes for top buttons */
+        .top-row-btn[data-mode="Standard"] { border-bottom: 3px solid rgba(255,255,255,0.3); }
+        .top-row-btn[data-mode="Record"] { border-bottom: 3px solid var(--glow-red); }
+        .top-row-btn[data-mode="Pattern"] { border-bottom: 3px solid var(--glow-blue); }
+        .top-row-btn[data-mode="Stutter"] { border-bottom: 3px solid var(--glow-magenta); }
+        .top-row-btn[data-mode="Macro1"] { border-bottom: 3px solid var(--glow-cyan); }
+        .top-row-btn[data-mode="Macro2"] { border-bottom: 3px solid var(--glow-orange); }
+        .top-row-btn[data-mode="Macro3"] { border-bottom: 3px solid var(--glow-green); }
+        .top-row-btn[data-mode="Macro4"] { border-bottom: 3px solid var(--glow-purple); }
+        .top-row-btn[data-mode="MashUp"] { border-bottom: 3px solid var(--text-main); }
+
+        .legend {
+            margin-top: 2rem;
+            max-width: 800px;
+            background: #1e293b;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            text-align: center;
+        }
+
+        .legend h2 {
+            margin-top: 0;
+            color: #38bdf8;
+            font-size: 1.2rem;
+        }
+
+        /* Tooltip styles */
+        #tooltip {
+            position: fixed;
+            background: var(--tooltip-bg);
+            color: var(--text-main);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--tooltip-border);
+            max-width: 280px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 1000;
+            backdrop-filter: blur(8px);
+        }
+
+        #tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #tooltip strong {
+            display: block;
+            color: #38bdf8;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.25rem;
+        }
+
+        #tooltip .related {
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            border-top: 1px dashed rgba(255,255,255,0.1);
+            padding-top: 0.5rem;
+        }
+
+        /* Mode-strip stubs — Plans 03/04/05 populate these with mode buttons */
+        .mode-strip {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>APC_64_40_11 Interactive Controller Manual</h1>
+        <p>Hover any control for behavior. Click a mode button to repaint the relevant region.</p>
+    </header>
+
+    <div id="legend-desc"></div>
+
+    <!-- Encoder mode strip — populated by Plan 03 -->
+    <div id="encoder-mode-strip" class="mode-strip"></div>
+
+    <!-- Matrix mode strip — populated by Plan 04 -->
+    <div id="matrix-mode-strip" class="mode-strip"></div>
+
+    <!-- Modifier overlay strip — populated by Plan 05 -->
+    <div id="modifier-overlay-strip" class="mode-strip"></div>
+
+    <div class="device" id="device"></div>
+
+    <div id="tooltip"></div>
+
+    <div id="placeholder-pad" class="pad" style="position:fixed; bottom:20px; left:20px; width:120px;">Hover me</div>
+
+    <script>
+        const tooltip = document.getElementById('tooltip');
+
+        let tooltipTimeout;
+
+        function showTooltip(e, content) {
+            clearTimeout(tooltipTimeout);
+            tooltipTimeout = setTimeout(() => {
+                tooltip.innerHTML = content;
+                tooltip.classList.add('visible');
+
+                // Positioning logic matching the window bounds
+                const x = e.clientX;
+                const y = e.clientY;
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+
+                let tx = x + 15;
+                let ty = y + 15;
+
+                // Adjust if overflowing
+                if (tx + tooltip.offsetWidth > w) tx = x - tooltip.offsetWidth - 15;
+                if (ty + tooltip.offsetHeight > h) ty = y - tooltip.offsetHeight - 15;
+
+                tooltip.style.left = `${tx}px`;
+                tooltip.style.top = `${ty}px`;
+            }, 350); // 350ms hover delay
+        }
+
+        function hideTooltip() {
+            clearTimeout(tooltipTimeout);
+            tooltip.classList.remove('visible');
+        }
+
+        function addTooltipEvents(element, contentGetter) {
+            element.addEventListener('mouseenter', (e) => {
+                const content = contentGetter();
+                if(content && content !== '') showTooltip(e, content);
+            });
+            element.addEventListener('mousemove', (e) => {
+                if (tooltip.classList.contains('visible')) {
+                    // Update tip position slightly if we are moving inside
+                    const x = e.clientX;
+                    const y = e.clientY;
+                    let tx = x + 15;
+                    let ty = y + 15;
+
+                    if (tx + tooltip.offsetWidth > window.innerWidth) tx = x - tooltip.offsetWidth - 15;
+                    if (ty + tooltip.offsetHeight > window.innerHeight) ty = y - tooltip.offsetHeight - 15;
+
+                    tooltip.style.left = `${tx}px`;
+                    tooltip.style.top = `${ty}px`;
+                }
+            });
+            element.addEventListener('mouseleave', hideTooltip);
+        }
+
+        // Wire the placeholder pad so we can prove the tooltip pipeline is alive.
+        // Plan 02 deletes the placeholder pad once real pads exist.
+        addTooltipEvents(
+            document.getElementById('placeholder-pad'),
+            () => '<strong>Tooltip Test</strong>If you can read this, the tooltip pipeline is alive.'
+        );
+
+        // Module-level state stubs for downstream plans.
+        // Defaults per CONTEXT D-04b: Pan + ClipLaunch + no overlay.
+        let currentEncoderMode = 'Pan';
+        let currentMatrixMode = 'ClipLaunch';
+        let modifierOverlays = { ShiftHeld: false, SaveMode: false };
+
+        // PLAN-02 builds the layout below this line
+    </script>
+
+</body>
+</html>
