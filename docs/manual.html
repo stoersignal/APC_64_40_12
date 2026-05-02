@@ -302,6 +302,26 @@
             justify-content: center;
             margin: 1rem 0;
         }
+
+        /* Plan 05 — Modifier overlay glow + dim classes (D-08b).
+           ShiftHeld overlay paints affected buttons with a purple glow;
+           SaveMode overlay paints the Tap+Nudge+top-encoder set with a
+           yellow glow and dims everything else. Stack on top of whatever
+           encoder/matrix-mode paint is current (D-04b). */
+        .pad.shift-overlay {
+            outline: 3px solid var(--glow-purple);
+            outline-offset: 2px;
+            box-shadow: 0 0 18px var(--glow-purple);
+        }
+        .pad.save-highlight {
+            outline: 3px solid var(--glow-yellow);
+            outline-offset: 2px;
+            box-shadow: 0 0 18px var(--glow-yellow);
+        }
+        .pad.save-dimmed {
+            opacity: 0.25;
+            filter: grayscale(0.6);
+        }
     </style>
 </head>
 <body>
@@ -648,9 +668,15 @@
             // Top encoders (rotaries) — Source: EncModeSelectorComponent.py:107-159.
             // Plan 03 contentGetter indirection: re-evaluates encoderModeDefinitions
             // [currentEncoderMode] on each hover so the tooltip reflects the active mode.
+            // Plan 05: SaveMode-first branch — when the SaveMode overlay is on,
+            // top encoders show their ramp-edit role + the encoder-touch save-cancel
+            // safety (DOC-05/DOC-06).
             document.querySelectorAll('.top-encoder').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
                 addTooltipEvents(el, () => {
+                    if (modifierOverlays['SaveMode']) {
+                        return `<strong>Top Encoder ${c + 1} — Ramp Encoder (Save Mode active)</strong>Touching this encoder during Shift+Tap Tempo CANCELS the save (ramp-edit safety, _ramp_edit_touched flag set in _enter_ramp_edit). Outside save mode, this encoder interpolates between variations using absolute 0–127 mapping over <code>visible_macro_count</code> (DOC-06).<div class="related"><em>Source:</em> ShiftableTransportComponent.py:75–76 (set_ramp_encoders) + :294–306 (_enter_ramp_edit) + :362–366 (visible_macro_count) + APC_64_40_9.py:304–305 (set_ramp_encoders wiring).</div>`;
+                    }
                     const def = encoderModeDefinitions[currentEncoderMode];
                     return def && def.topEncoderTip ? def.topEncoderTip(c) : '';
                 });
@@ -685,8 +711,8 @@
             });
 
             // Solo row (8 cells). Plan 04: matrix-mode aware (StepSequencer
-            // mode repurposes Solo to Loop Start). Plan 05 will replace the
-            // default branch with the toggle/momentary unified tooltip.
+            // mode repurposes Solo to Loop Start). Plan 05: toggle/momentary
+            // unified tooltip + Shift overlay branch (DOC-03).
             document.querySelectorAll('.solo-pad').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
                 addTooltipEvents(el, () => {
@@ -694,12 +720,17 @@
                     if (def && def.soloOverride) {
                         return def.soloOverride.tip(c);
                     }
-                    return `<strong>Solo (Track ${c + 1})</strong>Toggle / Momentary — see modifier overlay tooltips for the unified model (Plan 05).`;
+                    // Shift overlay variant
+                    if (modifierOverlays['ShiftHeld']) {
+                        return `<strong>Solo (Track ${c + 1}) — Shift held</strong>Under Shift, the channel-strip releases the Solo button. The matrix-mode button strip takes over (ShiftableSelectorComponent.py:92–119). Release Shift to restore the toggle/momentary Solo behavior.`;
+                    }
+                    return `<strong>Solo (Track ${c + 1}) — Toggle / Momentary</strong>Short tap toggles solo on/off. Hold ≥400ms acts momentary — solo activates on press-down and reverts on release.<div class="related"><em>Long-press on already-soloed track:</em> temporarily inverts (un-solos) until release.<em>Multi-track:</em> Each Solo button operates independently.<em>Source:</em> ToggleMomentaryChannelStripComponent.py:8 (LONG_PRESS_DELAY = 4 ticks × 100ms = 400ms) + :26–39 (_handle_toggle_momentary, fires-at-press-down state machine) + :53–67 (per-instance momentary state for multi-track independence).</div>`;
                 });
             });
 
             // Mute row (8 cells). Plan 04: matrix-mode aware (StepSequencer
-            // mode repurposes Mute to Loop Length).
+            // mode repurposes Mute to Loop Length). Plan 05: toggle/momentary
+            // unified tooltip + Shift overlay branch (DOC-03).
             document.querySelectorAll('.mute-pad').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
                 addTooltipEvents(el, () => {
@@ -707,7 +738,11 @@
                     if (def && def.muteOverride) {
                         return def.muteOverride.tip(c);
                     }
-                    return `<strong>Mute (Track ${c + 1})</strong>Toggle / Momentary — see modifier overlay tooltips for the unified model (Plan 05).`;
+                    // Shift overlay variant
+                    if (modifierOverlays['ShiftHeld']) {
+                        return `<strong>Mute (Track ${c + 1}) — Shift held</strong>Under Shift, the channel-strip releases the Mute button. The matrix-mode button strip takes over (ShiftableSelectorComponent.py:92–119). Release Shift to restore the toggle/momentary Mute behavior.`;
+                    }
+                    return `<strong>Mute (Track ${c + 1}) — Toggle / Momentary</strong>Short tap toggles mute on/off. Hold ≥400ms acts momentary — mute activates on press-down and reverts on release.<div class="related"><em>Long-press on already-muted track:</em> temporarily inverts (un-mutes) until release.<em>Multi-track:</em> Each Mute button operates independently.<em>Source:</em> ToggleMomentaryChannelStripComponent.py:8 (LONG_PRESS_DELAY = 4 ticks × 100ms = 400ms) + :26–39 (_handle_toggle_momentary, fires-at-press-down state machine) + :53–67 (per-instance momentary state for multi-track independence).</div>`;
                 });
             });
 
@@ -784,9 +819,32 @@
             });
 
             // Transport row (Play / Stop / Rec / Tap / Nudge ↑ / Nudge ↓ / Detail).
+            // Plan 05: Tap Tempo + Nudge get rich variation save/recall +
+            // lock-to-device tooltips (DOC-05/DOC-06/DOC-07). Save Mode
+            // overlay (Shift+Tap held) and Shift overlay branch the text.
             document.querySelectorAll('.transport-pad').forEach(el => {
                 const lbl = el.dataset.transport || el.textContent;
-                addTooltipEvents(el, () => `<strong>${lbl}</strong>Transport control — full behavior in Plan 05.`);
+                addTooltipEvents(el, () => {
+                    if (lbl === 'Tap') {
+                        if (modifierOverlays['SaveMode']) {
+                            return `<strong>Tap Tempo — Save Mode (Shift+Tap held)</strong>Releasing Shift+Tap saves the current Macro Rack state into the active variation slot. Save is CANCELLED if any ramp encoder is touched during the hold (ramp-edit safety).<div class="related"><em>Source:</em> ShiftableTransportComponent.py:158–177 (_tap_tempo_value) + :294–306 (_enter_ramp_edit / _exit_ramp_edit). The save-cancel guard checks <code>_ramp_edit_touched</code>.</div>`;
+                        }
+                        if (modifierOverlays['ShiftHeld']) {
+                            return `<strong>Tap Tempo — Shift held (enter Save Mode)</strong>Press while holding Shift to enter Save Mode. Release to commit the save (or cancel if any ramp encoder was touched).<div class="related"><em>Source:</em> ShiftableTransportComponent.py:158–177.</div>`;
+                        }
+                        return `<strong>Tap Tempo — Recall Variation</strong>Press to recall the currently selected Macro Rack variation (saved here as Macro Rack variations), with optional ramp interpolation across <code>visible_macro_count</code> macros (DOC-06). Use Nudge ↑ / ↓ to step between variations.<div class="related"><em>Shift+Tap (hold):</em> save the current macro state into the active variation slot. Save is cancelled if any ramp encoder is touched during the hold. <em>Source:</em> ShiftableTransportComponent.py:158–177 + :362–366 (visible_macro_count).</div>`;
+                    }
+                    if (lbl === 'Nudge ↑') {
+                        return `<strong>Nudge ↑ — Variation Step Forward</strong>Steps to the next variation slot of the appointed Macro Rack device — moves through the rack's variations one slot at a time.<div class="related"><em>Source:</em> ShiftableTransportComponent.py:137–142 (_nudge_up_value).</div>`;
+                    }
+                    if (lbl === 'Nudge ↓') {
+                        if (modifierOverlays['ShiftHeld']) {
+                            return `<strong>Nudge ↓ — Shift held — Toggle Lock-to-Device (DOC-07)</strong>Shift+Nudge Back toggles the lock-to-device flag (<code>_device_selection_follows_track_selection</code>) — when on, the device follows the selected track; when off, the device stays locked to the current rack.<div class="related"><em>Source:</em> ShiftableTransportComponent.py:144–156 line 151 — the Shift+Nudge-back branch.</div>`;
+                        }
+                        return `<strong>Nudge ↓ — Variation Step Back</strong>Steps to the previous variation slot — walks backward through the rack's variations.<div class="related"><em>Shift+Nudge ↓:</em> toggles lock-to-device (DOC-07). <em>Source:</em> ShiftableTransportComponent.py:144–156.</div>`;
+                    }
+                    return `<strong>${lbl}</strong>Transport control.`;
+                });
             });
 
             // Stop-All-Clips.
@@ -794,10 +852,19 @@
                 addTooltipEvents(el, () => `<strong>Stop All Clips</strong>Stops all currently playing clips.`);
             });
 
-            // Shift button.
+            // Shift button. Plan 05: full Shift overlay reassignment list
+            // including Shift+Nudge Back lock-to-device (DOC-07) and
+            // Shift+Master step-sequencer toggle (DOC-09).
             const shift = document.getElementById('shift-button');
             if (shift) {
-                addTooltipEvents(shift, () => `<strong>Shift</strong>Hold to access shifted button meanings — see modifier overlay (Plan 05) for the full remap list.`);
+                addTooltipEvents(shift, () => `<strong>Shift</strong>Hold to remap many buttons. Under Shift:
+                    <ul style="margin: 4px 0; padding-left: 1.2rem;">
+                        <li>Channel-strip Solo / Mute / Arm release; matrix-mode and slider-mode buttons take over the track-select row.</li>
+                        <li>Shift + Master toggles the Step Sequencer overlay (ShiftableSelectorComponent.py:137–173).</li>
+                        <li>Shift + Nudge ↓ toggles lock-to-device (ShiftableTransportComponent.py:144–156, DOC-07).</li>
+                        <li>Shift + Tap Tempo enters Save Mode for variation save (ShiftableTransportComponent.py:158–177, DOC-05).</li>
+                    </ul>
+                    <div class="related"><em>Source:</em> ShiftableSelectorComponent.py:92–119 (update() shows the full release/reassign cycle).</div>`);
             }
         }
 
@@ -1311,6 +1378,81 @@
             }
         }
 
+        // ────────────────────────────────────────────────────────────────
+        // Plan 05 — Modifier overlay strip (D-04a, D-04b, D-08b).
+        //
+        // Two orthogonal modifier overlays — ShiftHeld and SaveMode — that
+        // STACK on top of whatever encoder/matrix mode is active (they do
+        // not reset them). When ShiftHeld is on, affected buttons get a
+        // .shift-overlay glow and tooltips switch to the shifted meaning
+        // (handled inside the contentGetter closures themselves — they
+        // read modifierOverlays['ShiftHeld'] at hover-time). When SaveMode
+        // is on, only Nudge± + ramp-eligible top encoders are highlighted;
+        // the rest of the controller fades via .save-dimmed.
+        const modifierOverlayDefinitions = {
+            'ShiftHeld': {
+                desc: 'Shift held — buttons remap. Channel-strip Solo/Mute release; matrix-mode + slider-mode buttons take over the track-select row. The Master button enters Step Sequencer toggle.',
+                // Selectors that get the .shift-overlay glow class while the
+                // overlay is on. Tooltip text changes are handled in the
+                // individual contentGetter closures (solo-pad, mute-pad,
+                // transport-pad/Tap, transport-pad/Nudge ↓).
+                affectedSelectors: ['.shift-pad', '.solo-pad', '.mute-pad', '.transport-pad[data-transport="Tap"]', '.transport-pad[data-transport="Nudge ↑"]', '.transport-pad[data-transport="Nudge ↓"]'],
+            },
+            'SaveMode': {
+                desc: 'Save mode (Shift+Tap Tempo held) — Nudge± + ramp-eligible top encoders are highlighted. Releasing Shift+Tap saves the current macro state into the active variation slot, UNLESS any ramp encoder was touched during the hold (encoder-touch cancels save — ramp-edit safety, ShiftableTransportComponent.py:158–177).',
+                highlightSelectors: ['.transport-pad[data-transport="Tap"]', '.transport-pad[data-transport="Nudge ↑"]', '.transport-pad[data-transport="Nudge ↓"]', '.top-encoder'],
+                dimSelectors: ['.grid-pad', '.track-stop', '.scene-launch', '.solo-pad', '.mute-pad', '.slider-pad', '.crossfader-pad', '.device-encoder', '.device-bank-nav', '.transport-pad:not([data-transport="Tap"]):not([data-transport="Nudge ↑"]):not([data-transport="Nudge ↓"])'],
+            },
+        };
+
+        // toggleModifierOverlay(mode): flip the overlay flag, repaint the
+        // .modifier-overlay-btn highlight, apply or remove the .shift-overlay /
+        // .save-highlight / .save-dimmed classes on the affected DOM, and
+        // update the legend description without nuking the Encoder Mode +
+        // Matrix Mode lines.
+        function toggleModifierOverlay(mode) {
+            modifierOverlays[mode] = !modifierOverlays[mode];
+
+            // Repaint the modifier-overlay-btn highlight.
+            document.querySelectorAll('.modifier-overlay-btn').forEach(btn => {
+                if (btn.dataset.mode === mode) {
+                    btn.classList.toggle('active', modifierOverlays[mode]);
+                }
+            });
+
+            // Apply or remove the overlay visual classes.
+            if (mode === 'ShiftHeld') {
+                const def = modifierOverlayDefinitions['ShiftHeld'];
+                def.affectedSelectors.forEach(sel => {
+                    document.querySelectorAll(sel).forEach(el => {
+                        el.classList.toggle('shift-overlay', modifierOverlays['ShiftHeld']);
+                    });
+                });
+            } else if (mode === 'SaveMode') {
+                const def = modifierOverlayDefinitions['SaveMode'];
+                def.highlightSelectors.forEach(sel => {
+                    document.querySelectorAll(sel).forEach(el => {
+                        el.classList.toggle('save-highlight', modifierOverlays['SaveMode']);
+                    });
+                });
+                def.dimSelectors.forEach(sel => {
+                    document.querySelectorAll(sel).forEach(el => {
+                        el.classList.toggle('save-dimmed', modifierOverlays['SaveMode']);
+                    });
+                });
+            }
+
+            // Update legend description — preserve Encoder Mode + Matrix Mode
+            // lines, append/replace the Modifier Overlay line.
+            const legend = document.getElementById('legend-desc');
+            if (legend) {
+                const overlays = Object.keys(modifierOverlays).filter(k => modifierOverlays[k]).join(' + ') || 'none';
+                const lines = legend.innerHTML.split('<br>');
+                const base = lines.filter(l => !l.includes('Modifier Overlay')).join('<br>');
+                legend.innerHTML = base + `<br><strong>Modifier Overlay:</strong> ${overlays}`;
+            }
+        }
+
         // Defensive removal of the Plan-01 placeholder pad (the HTML
         // element was already deleted in this plan, but if a future
         // editor reintroduces it the runtime will still clean it up).
@@ -1367,6 +1509,33 @@
             });
 
             setMatrixMode('ClipLaunch');  // initial paint per D-04b (default)
+
+            // Plan 05 — wire modifier-overlay-strip click handlers + tooltips
+            // on the strip buttons themselves + initial legend line.
+            // Per D-04b/D-08b, both overlays default to OFF; clicking toggles.
+            document.querySelectorAll('.modifier-overlay-btn').forEach(btn => {
+                btn.addEventListener('click', () => toggleModifierOverlay(btn.dataset.mode));
+            });
+
+            // Tooltips on the modifier-overlay-strip buttons themselves.
+            // Same contentGetter indirection so the tooltip text reflects the
+            // current ON/OFF state at hover-time.
+            document.querySelectorAll('.modifier-overlay-btn').forEach(btn => {
+                addTooltipEvents(btn, () => {
+                    const def = modifierOverlayDefinitions[btn.dataset.mode];
+                    if (!def) return '';
+                    const state = modifierOverlays[btn.dataset.mode] ? 'ON' : 'OFF';
+                    return `<strong>${btn.dataset.mode} (${state})</strong>${def.desc}<div class="related"><em>Click:</em> toggle the overlay. Modifier overlays stack on top of whatever encoder/matrix mode is active (D-04b / D-08b).</div>`;
+                });
+            });
+
+            // Initial legend: include "Modifier Overlay: none" line so the
+            // three orthogonal mode dimensions (encoder / matrix / modifier
+            // overlay) all show in the legend at first paint.
+            const legendInit = document.getElementById('legend-desc');
+            if (legendInit && !legendInit.innerHTML.includes('Modifier Overlay')) {
+                legendInit.innerHTML += `<br><strong>Modifier Overlay:</strong> none`;
+            }
         });
     </script>
 
