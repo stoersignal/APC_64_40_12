@@ -57,30 +57,42 @@
             margin: 0;
         }
 
-        /* APC40 layout — Plan 02 reshape (D-07 region inventory).
-           12 columns × 16 rows. Named areas document intent; JS assigns
-           explicit gridColumn/gridRow per element so positioning is exact.
+        /* APC40 layout — overhauled to match the actual APC40 hardware footprint
+           per the user's reference image (2026-05-02). 16 columns × 17 rows.
+           JS assigns explicit gridColumn/gridRow per element; named areas removed.
 
-           Column map:
-             col 1       — Shift / Track-Nav cluster
-             cols 2..9   — 8 main columns (encoders, grid, sliders, etc.)
-             col 10      — Scene Launch column / Master Volume / Stop-All-Clips
-             col 11      — Master Select (per I-03)
-             col 12      — right gutter
+           Column map (left zone — clip + tracks + sliders):
+             cols 1..8   — clip-launch grid, clip-stop row, track-selection row,
+                           solo / mute / activator-arm rows, channel sliders (1..8)
+             col 9       — scene-launch column / stop-all-clips / master-select / master fader
+             col 10      — small spacer
+
+           Column map (right zone — encoders + transport):
+             cols 11..14 — top encoders (4×2), device encoders (4×2),
+                           pan/send physical buttons (4×1), CLIP/TRACK + DEV ON/OFF + bank arrows (4×1),
+                           DETAIL VIEW + REC QUANT + MIDI OVERDUB + METRONOME (4×1),
+                           PLAY / STOP / REC + spacer (4×1), crossfader (spans 4)
+             col 15      — SHIFT button + cursor-pad LEFT/DOWN
+             col 16      — TAP TEMPO + cursor-pad UP/RIGHT + NUDGE ↓ / NUDGE ↑
 
            Row map:
-             row 1       — tnav  Track Navigation buttons (◀ Track / Track ▶)
-             row 2       — enc   Top encoders (8)
-             row 3       — encr  Top encoder ring LEDs (8)
-             row 4       — dev   Device encoders (8)
-             row 5       — dnav  Device bank nav (4 cells)
-             row 6       — solo  Solo row (8) + Scene Launch 1
-             row 7       — mute  Mute row (8) + Scene Launch 2
-             row 8       — arm   Activator/Arm row (8 cells, I-03/I-04 fix) + Scene Launch 3
-             rows 9..13  — g     Clip launch grid (5×8) + Scene Launch 4..5 (only 2 of 5)
-             row 14      — stop  Track Stop row (8) + Stop-All-Clips
-             row 15      — sld   Sliders (8 channel) + Master Volume + master-select(mst)
-             row 16      — trn   Transport row (Play/Stop/Rec/Tap/Nudge±/Detail) + Shift + crossfader(xf)
+             row 1       — labels (TRACK CONTROL header, etc.)
+             rows 2..6   — clip-launch grid (5 rows × cols 1..8) + scene-launch col 9 +
+                           top encoders (cols 11..14, rows 2 & 4) + rings (rows 3 & 5) +
+                           SHIFT (col 15 row 2) + TAP (col 16 row 2) +
+                           cursor-pad cluster (cols 15..16 rows 3..5) + NUDGE (col 16 rows 4..5)
+             row 6       — pan / sendA / sendB / sendC physical buttons (cols 11..14)
+             row 7       — clip-stop row (cols 1..8) + stop-all-clips (col 9)
+             row 8       — track-selection row (cols 1..8) + master-select (col 9) +
+                           device encoders D1..D4 (cols 11..14)
+             row 9       — solo row (cols 1..8) + device-encoder rings (cols 11..14)
+             row 10      — mute row (cols 1..8) + device encoders D5..D8 (cols 11..14)
+             row 11      — activator-arm row (cols 1..8) + device-encoder rings (cols 11..14)
+             rows 12..13 — channel sliders (cols 1..8 span 2 rows) + master fader (col 9 span 2) +
+                           clip/track + dev on/off + bank ◀ ▶ (cols 11..14 row 12) +
+                           detail view + rec quant + midi overdub + metronome (cols 11..14 row 13)
+             row 14      — cue-level knob (col 9) + play / stop / rec (cols 11..13)
+             row 15      — crossfader (cols 11..14 wide horizontal) — bottom-right per user reference image
         */
         .device {
             background: var(--apc-case);
@@ -89,25 +101,8 @@
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.05);
             border: 2px solid var(--apc-border);
             display: grid;
-            gap: 12px;
-            grid-template-columns: auto repeat(8, auto) auto auto auto;
-            grid-template-areas:
-                "sft tnav tnav tnav tnav tnav tnav tnav tnav .   .   ."
-                ".   enc  enc  enc  enc  enc  enc  enc  enc  .   mst ."
-                ".   encr encr encr encr encr encr encr encr .   .   ."
-                ".   dev  dev  dev  dev  dev  dev  dev  dev  .   .   ."
-                ".   dnav dnav dnav dnav .    .    .    .    .   .   ."
-                ".   solo solo solo solo solo solo solo solo scn .   ."
-                ".   mute mute mute mute mute mute mute mute scn .   ."
-                ".   arm  arm  arm  arm  arm  arm  arm  arm  scn .   ."
-                ".   g    g    g    g    g    g    g    g    scn .   ."
-                ".   g    g    g    g    g    g    g    g    scn .   ."
-                ".   g    g    g    g    g    g    g    g    .   .   ."
-                ".   g    g    g    g    g    g    g    g    .   .   ."
-                ".   g    g    g    g    g    g    g    g    .   .   ."
-                ".   stop stop stop stop stop stop stop stop .   .   ."
-                ".   sld  sld  sld  sld  sld  sld  sld  sld  sld .   ."
-                "sft trn  trn  trn  trn  trn  trn  trn  xf   xf  .   .";
+            gap: 8px;
+            grid-template-columns: repeat(8, auto) auto 14px repeat(4, auto) auto auto;
             position: relative;
         }
 
@@ -182,11 +177,62 @@
         }
 
         .crossfader-pad {
-            width: 110px;
-            height: 50px;
+            width: 100%;
+            min-width: 220px;
+            height: 28px;
             border-radius: 6px;
             background: linear-gradient(to right, #475569, #1e293b);
             cursor: not-allowed;
+        }
+
+        /* Cue Level rotary knob (between PADS region and FX region per APC40 hardware). */
+        .cue-level-knob {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 50% 35%, #64748b 0%, #1e293b 70%);
+            border: 2px solid var(--apc-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.55rem;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        /* SELECT cursor pad cluster (UP / DOWN / LEFT / RIGHT). */
+        .cursor-pad {
+            width: 36px;
+            height: 35px;
+            border-radius: 8px;
+            background: var(--pad-off);
+            border: 1px solid var(--apc-border);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        /* Detail-row buttons (DETAIL VIEW / REC QUANT / MIDI OVERDUB / METRONOME). */
+        .detail-row-btn {
+            font-size: 0.55rem;
+            padding: 4px;
+            line-height: 1.1;
+        }
+
+        /* Pan/Send physical buttons (under top encoders) — distinct from mode-strip-btns. */
+        .pan-send-btn {
+            font-weight: 600;
+            font-size: 0.65rem;
+            background: linear-gradient(to bottom, #ef4444, #b91c1c);
+            border-color: #7f1d1d;
+        }
+
+        /* Track-selection row (8 + Master) — below clip-stop row, above solo/mute/arm. */
+        .track-select-pad {
+            font-size: 0.55rem;
         }
 
         /* Mode-strip stub buttons — Plans 03/04/05 wire onclick + active painting. */
@@ -378,175 +424,219 @@
     -->
     <div class="device" id="device">
 
-        <!-- Shift button (col 1, row 1) — bottom-left corner anchor. -->
-        <div class="pad rect-h shift-pad" id="shift-button" style="background-color:#a855f7; grid-row:1; grid-column:1;">SHIFT</div>
+        <!-- ==================================================================
+             LEFT ZONE (cols 1..9) — clip launch + tracks + sliders
+             ================================================================== -->
 
-        <!-- Track navigation (row 1, cols 2..3) — ◀ Track / Track ▶ -->
-        <div class="pad rect-h track-nav" data-nav="prev" style="grid-row:1; grid-column:2;">◀ Track</div>
-        <div class="pad rect-h track-nav" data-nav="next" style="grid-row:1; grid-column:3;">Track ▶</div>
+        <!-- Clip Launch grid: 5 rows × 8 cols (rows 2..6, cols 1..8).
+             Source: ROADMAP — clip launch grid is the top-left anchor of the APC40. -->
+        <div class="pad grid-pad" data-row="0" data-col="0" style="background-color:#2563eb; grid-row:2; grid-column:1;">T1<br>S1</div>
+        <div class="pad grid-pad" data-row="0" data-col="1" style="background-color:#2563eb; grid-row:2; grid-column:2;">T2<br>S1</div>
+        <div class="pad grid-pad" data-row="0" data-col="2" style="background-color:#2563eb; grid-row:2; grid-column:3;">T3<br>S1</div>
+        <div class="pad grid-pad" data-row="0" data-col="3" style="background-color:#2563eb; grid-row:2; grid-column:4;">T4<br>S1</div>
+        <div class="pad grid-pad" data-row="0" data-col="4" style="background-color:#2563eb; grid-row:2; grid-column:5;">T5<br>S1</div>
+        <div class="pad grid-pad" data-row="0" data-col="5" style="background-color:#2563eb; grid-row:2; grid-column:6;">T6<br>S1</div>
+        <div class="pad grid-pad" data-row="0" data-col="6" style="background-color:#2563eb; grid-row:2; grid-column:7;">T7<br>S1</div>
+        <div class="pad grid-pad" data-row="0" data-col="7" style="background-color:#2563eb; grid-row:2; grid-column:8;">T8<br>S1</div>
+        <div class="pad grid-pad" data-row="1" data-col="0" style="background-color:#2563eb; grid-row:3; grid-column:1;">T1<br>S2</div>
+        <div class="pad grid-pad" data-row="1" data-col="1" style="background-color:#2563eb; grid-row:3; grid-column:2;">T2<br>S2</div>
+        <div class="pad grid-pad" data-row="1" data-col="2" style="background-color:#2563eb; grid-row:3; grid-column:3;">T3<br>S2</div>
+        <div class="pad grid-pad" data-row="1" data-col="3" style="background-color:#2563eb; grid-row:3; grid-column:4;">T4<br>S2</div>
+        <div class="pad grid-pad" data-row="1" data-col="4" style="background-color:#2563eb; grid-row:3; grid-column:5;">T5<br>S2</div>
+        <div class="pad grid-pad" data-row="1" data-col="5" style="background-color:#2563eb; grid-row:3; grid-column:6;">T6<br>S2</div>
+        <div class="pad grid-pad" data-row="1" data-col="6" style="background-color:#2563eb; grid-row:3; grid-column:7;">T7<br>S2</div>
+        <div class="pad grid-pad" data-row="1" data-col="7" style="background-color:#2563eb; grid-row:3; grid-column:8;">T8<br>S2</div>
+        <div class="pad grid-pad" data-row="2" data-col="0" style="background-color:#2563eb; grid-row:4; grid-column:1;">T1<br>S3</div>
+        <div class="pad grid-pad" data-row="2" data-col="1" style="background-color:#2563eb; grid-row:4; grid-column:2;">T2<br>S3</div>
+        <div class="pad grid-pad" data-row="2" data-col="2" style="background-color:#2563eb; grid-row:4; grid-column:3;">T3<br>S3</div>
+        <div class="pad grid-pad" data-row="2" data-col="3" style="background-color:#2563eb; grid-row:4; grid-column:4;">T4<br>S3</div>
+        <div class="pad grid-pad" data-row="2" data-col="4" style="background-color:#2563eb; grid-row:4; grid-column:5;">T5<br>S3</div>
+        <div class="pad grid-pad" data-row="2" data-col="5" style="background-color:#2563eb; grid-row:4; grid-column:6;">T6<br>S3</div>
+        <div class="pad grid-pad" data-row="2" data-col="6" style="background-color:#2563eb; grid-row:4; grid-column:7;">T7<br>S3</div>
+        <div class="pad grid-pad" data-row="2" data-col="7" style="background-color:#2563eb; grid-row:4; grid-column:8;">T8<br>S3</div>
+        <div class="pad grid-pad" data-row="3" data-col="0" style="background-color:#2563eb; grid-row:5; grid-column:1;">T1<br>S4</div>
+        <div class="pad grid-pad" data-row="3" data-col="1" style="background-color:#2563eb; grid-row:5; grid-column:2;">T2<br>S4</div>
+        <div class="pad grid-pad" data-row="3" data-col="2" style="background-color:#2563eb; grid-row:5; grid-column:3;">T3<br>S4</div>
+        <div class="pad grid-pad" data-row="3" data-col="3" style="background-color:#2563eb; grid-row:5; grid-column:4;">T4<br>S4</div>
+        <div class="pad grid-pad" data-row="3" data-col="4" style="background-color:#2563eb; grid-row:5; grid-column:5;">T5<br>S4</div>
+        <div class="pad grid-pad" data-row="3" data-col="5" style="background-color:#2563eb; grid-row:5; grid-column:6;">T6<br>S4</div>
+        <div class="pad grid-pad" data-row="3" data-col="6" style="background-color:#2563eb; grid-row:5; grid-column:7;">T7<br>S4</div>
+        <div class="pad grid-pad" data-row="3" data-col="7" style="background-color:#2563eb; grid-row:5; grid-column:8;">T8<br>S4</div>
+        <div class="pad grid-pad" data-row="4" data-col="0" style="background-color:#2563eb; grid-row:6; grid-column:1;">T1<br>S5</div>
+        <div class="pad grid-pad" data-row="4" data-col="1" style="background-color:#2563eb; grid-row:6; grid-column:2;">T2<br>S5</div>
+        <div class="pad grid-pad" data-row="4" data-col="2" style="background-color:#2563eb; grid-row:6; grid-column:3;">T3<br>S5</div>
+        <div class="pad grid-pad" data-row="4" data-col="3" style="background-color:#2563eb; grid-row:6; grid-column:4;">T4<br>S5</div>
+        <div class="pad grid-pad" data-row="4" data-col="4" style="background-color:#2563eb; grid-row:6; grid-column:5;">T5<br>S5</div>
+        <div class="pad grid-pad" data-row="4" data-col="5" style="background-color:#2563eb; grid-row:6; grid-column:6;">T6<br>S5</div>
+        <div class="pad grid-pad" data-row="4" data-col="6" style="background-color:#2563eb; grid-row:6; grid-column:7;">T7<br>S5</div>
+        <div class="pad grid-pad" data-row="4" data-col="7" style="background-color:#2563eb; grid-row:6; grid-column:8;">T8<br>S5</div>
 
-        <!-- Top encoders (row 2, cols 2..9) — 8 cells.
-             Source: EncModeSelectorComponent.py:107-159. Plan 03 wires repaint. -->
-        <div class="pad encoder-pad top-encoder" data-col="0" style="grid-row:2; grid-column:2;">T1</div>
-        <div class="pad encoder-pad top-encoder" data-col="1" style="grid-row:2; grid-column:3;">T2</div>
-        <div class="pad encoder-pad top-encoder" data-col="2" style="grid-row:2; grid-column:4;">T3</div>
-        <div class="pad encoder-pad top-encoder" data-col="3" style="grid-row:2; grid-column:5;">T4</div>
-        <div class="pad encoder-pad top-encoder" data-col="4" style="grid-row:2; grid-column:6;">T5</div>
-        <div class="pad encoder-pad top-encoder" data-col="5" style="grid-row:2; grid-column:7;">T6</div>
-        <div class="pad encoder-pad top-encoder" data-col="6" style="grid-row:2; grid-column:8;">T7</div>
-        <div class="pad encoder-pad top-encoder" data-col="7" style="grid-row:2; grid-column:9;">T8</div>
+        <!-- Scene Launch column (5 cells, rows 2..6, col 9). -->
+        <div class="pad rect-h scene-launch" data-row="0" style="grid-row:2; grid-column:9;">Scene 1</div>
+        <div class="pad rect-h scene-launch" data-row="1" style="grid-row:3; grid-column:9;">Scene 2</div>
+        <div class="pad rect-h scene-launch" data-row="2" style="grid-row:4; grid-column:9;">Scene 3</div>
+        <div class="pad rect-h scene-launch" data-row="3" style="grid-row:5; grid-column:9;">Scene 4</div>
+        <div class="pad rect-h scene-launch" data-row="4" style="grid-row:6; grid-column:9;">Scene 5</div>
 
-        <!-- Top encoder ring LEDs (row 3, cols 2..9). -->
-        <div class="pad encoder-ring top-encoder-ring" data-col="0" style="grid-row:3; grid-column:2;">○</div>
-        <div class="pad encoder-ring top-encoder-ring" data-col="1" style="grid-row:3; grid-column:3;">○</div>
-        <div class="pad encoder-ring top-encoder-ring" data-col="2" style="grid-row:3; grid-column:4;">○</div>
-        <div class="pad encoder-ring top-encoder-ring" data-col="3" style="grid-row:3; grid-column:5;">○</div>
-        <div class="pad encoder-ring top-encoder-ring" data-col="4" style="grid-row:3; grid-column:6;">○</div>
-        <div class="pad encoder-ring top-encoder-ring" data-col="5" style="grid-row:3; grid-column:7;">○</div>
-        <div class="pad encoder-ring top-encoder-ring" data-col="6" style="grid-row:3; grid-column:8;">○</div>
-        <div class="pad encoder-ring top-encoder-ring" data-col="7" style="grid-row:3; grid-column:9;">○</div>
+        <!-- Clip Stop row (row 7, cols 1..8) + Stop-All-Clips (row 7, col 9). -->
+        <div class="pad rect-h track-stop" data-col="0" style="grid-row:7; grid-column:1;">Stop 1</div>
+        <div class="pad rect-h track-stop" data-col="1" style="grid-row:7; grid-column:2;">Stop 2</div>
+        <div class="pad rect-h track-stop" data-col="2" style="grid-row:7; grid-column:3;">Stop 3</div>
+        <div class="pad rect-h track-stop" data-col="3" style="grid-row:7; grid-column:4;">Stop 4</div>
+        <div class="pad rect-h track-stop" data-col="4" style="grid-row:7; grid-column:5;">Stop 5</div>
+        <div class="pad rect-h track-stop" data-col="5" style="grid-row:7; grid-column:6;">Stop 6</div>
+        <div class="pad rect-h track-stop" data-col="6" style="grid-row:7; grid-column:7;">Stop 7</div>
+        <div class="pad rect-h track-stop" data-col="7" style="grid-row:7; grid-column:8;">Stop 8</div>
+        <div class="pad rect-h stop-all-pad" style="grid-row:7; grid-column:9;">Stop<br>All</div>
 
-        <!-- Master Select button (col 11, row 2) — I-03 fix. Default unmapped per
-             DOC-08; Plan 04 repaints to Follow toggle in StepSequencer mode.
-             Source: StepSequencerComponent.py:489-498 wired in APC_64_40_9.py:190. -->
-        <div class="pad rect-h master-select" id="master-select" style="grid-row:2; grid-column:11;">Master<br>Sel</div>
+        <!-- Track Selection row (row 8, cols 1..8) + Master Select (row 8, col 9).
+             Per user reference image: TRACK SELECTION sits BETWEEN clip-stop and solo/mute/arm. -->
+        <div class="pad rect-h track-select-pad" data-col="0" style="grid-row:8; grid-column:1;">Track 1</div>
+        <div class="pad rect-h track-select-pad" data-col="1" style="grid-row:8; grid-column:2;">Track 2</div>
+        <div class="pad rect-h track-select-pad" data-col="2" style="grid-row:8; grid-column:3;">Track 3</div>
+        <div class="pad rect-h track-select-pad" data-col="3" style="grid-row:8; grid-column:4;">Track 4</div>
+        <div class="pad rect-h track-select-pad" data-col="4" style="grid-row:8; grid-column:5;">Track 5</div>
+        <div class="pad rect-h track-select-pad" data-col="5" style="grid-row:8; grid-column:6;">Track 6</div>
+        <div class="pad rect-h track-select-pad" data-col="6" style="grid-row:8; grid-column:7;">Track 7</div>
+        <div class="pad rect-h track-select-pad" data-col="7" style="grid-row:8; grid-column:8;">Track 8</div>
+        <div class="pad rect-h master-select" id="master-select" style="grid-row:8; grid-column:9;">Master<br>Sel</div>
 
-        <!-- Device encoders (row 4, cols 2..9) — 8 cells.
-             Source: Pan16DeviceComponent.py 16-macro mapping. Plan 03 wires. -->
-        <div class="pad encoder-pad device-encoder" data-col="0" style="grid-row:4; grid-column:2;">D1</div>
-        <div class="pad encoder-pad device-encoder" data-col="1" style="grid-row:4; grid-column:3;">D2</div>
-        <div class="pad encoder-pad device-encoder" data-col="2" style="grid-row:4; grid-column:4;">D3</div>
-        <div class="pad encoder-pad device-encoder" data-col="3" style="grid-row:4; grid-column:5;">D4</div>
-        <div class="pad encoder-pad device-encoder" data-col="4" style="grid-row:4; grid-column:6;">D5</div>
-        <div class="pad encoder-pad device-encoder" data-col="5" style="grid-row:4; grid-column:7;">D6</div>
-        <div class="pad encoder-pad device-encoder" data-col="6" style="grid-row:4; grid-column:8;">D7</div>
-        <div class="pad encoder-pad device-encoder" data-col="7" style="grid-row:4; grid-column:9;">D8</div>
+        <!-- Solo row (row 9, cols 1..8). -->
+        <div class="pad rect-h solo-pad" data-col="0" style="background-color:#06b6d4; grid-row:9; grid-column:1;">Solo<br>1</div>
+        <div class="pad rect-h solo-pad" data-col="1" style="background-color:#06b6d4; grid-row:9; grid-column:2;">Solo<br>2</div>
+        <div class="pad rect-h solo-pad" data-col="2" style="background-color:#06b6d4; grid-row:9; grid-column:3;">Solo<br>3</div>
+        <div class="pad rect-h solo-pad" data-col="3" style="background-color:#06b6d4; grid-row:9; grid-column:4;">Solo<br>4</div>
+        <div class="pad rect-h solo-pad" data-col="4" style="background-color:#06b6d4; grid-row:9; grid-column:5;">Solo<br>5</div>
+        <div class="pad rect-h solo-pad" data-col="5" style="background-color:#06b6d4; grid-row:9; grid-column:6;">Solo<br>6</div>
+        <div class="pad rect-h solo-pad" data-col="6" style="background-color:#06b6d4; grid-row:9; grid-column:7;">Solo<br>7</div>
+        <div class="pad rect-h solo-pad" data-col="7" style="background-color:#06b6d4; grid-row:9; grid-column:8;">Solo<br>8</div>
 
-        <!-- Device bank navigation (row 5, cols 2..5) — 4 cells. -->
-        <div class="pad rect-h device-bank-nav" data-idx="0" style="grid-row:5; grid-column:2;">◀ Bank</div>
-        <div class="pad rect-h device-bank-nav" data-idx="1" style="grid-row:5; grid-column:3;">Bank ▶</div>
-        <div class="pad rect-h device-bank-nav" data-idx="2" style="grid-row:5; grid-column:4;">◀ Dev</div>
-        <div class="pad rect-h device-bank-nav" data-idx="3" style="grid-row:5; grid-column:5;">Dev ▶</div>
+        <!-- Mute row (row 10, cols 1..8). -->
+        <div class="pad rect-h mute-pad" data-col="0" style="background-color:#f97316; grid-row:10; grid-column:1;">Mute<br>1</div>
+        <div class="pad rect-h mute-pad" data-col="1" style="background-color:#f97316; grid-row:10; grid-column:2;">Mute<br>2</div>
+        <div class="pad rect-h mute-pad" data-col="2" style="background-color:#f97316; grid-row:10; grid-column:3;">Mute<br>3</div>
+        <div class="pad rect-h mute-pad" data-col="3" style="background-color:#f97316; grid-row:10; grid-column:4;">Mute<br>4</div>
+        <div class="pad rect-h mute-pad" data-col="4" style="background-color:#f97316; grid-row:10; grid-column:5;">Mute<br>5</div>
+        <div class="pad rect-h mute-pad" data-col="5" style="background-color:#f97316; grid-row:10; grid-column:6;">Mute<br>6</div>
+        <div class="pad rect-h mute-pad" data-col="6" style="background-color:#f97316; grid-row:10; grid-column:7;">Mute<br>7</div>
+        <div class="pad rect-h mute-pad" data-col="7" style="background-color:#f97316; grid-row:10; grid-column:8;">Mute<br>8</div>
 
-        <!-- Solo row (row 6, cols 2..9) — 8 cells. -->
-        <div class="pad rect-h solo-pad" data-col="0" style="background-color:#06b6d4; grid-row:6; grid-column:2;">Solo<br>1</div>
-        <div class="pad rect-h solo-pad" data-col="1" style="background-color:#06b6d4; grid-row:6; grid-column:3;">Solo<br>2</div>
-        <div class="pad rect-h solo-pad" data-col="2" style="background-color:#06b6d4; grid-row:6; grid-column:4;">Solo<br>3</div>
-        <div class="pad rect-h solo-pad" data-col="3" style="background-color:#06b6d4; grid-row:6; grid-column:5;">Solo<br>4</div>
-        <div class="pad rect-h solo-pad" data-col="4" style="background-color:#06b6d4; grid-row:6; grid-column:6;">Solo<br>5</div>
-        <div class="pad rect-h solo-pad" data-col="5" style="background-color:#06b6d4; grid-row:6; grid-column:7;">Solo<br>6</div>
-        <div class="pad rect-h solo-pad" data-col="6" style="background-color:#06b6d4; grid-row:6; grid-column:8;">Solo<br>7</div>
-        <div class="pad rect-h solo-pad" data-col="7" style="background-color:#06b6d4; grid-row:6; grid-column:9;">Solo<br>8</div>
+        <!-- Activator-Arm row (row 11, cols 1..8). -->
+        <div class="pad rect-h arm-pad" data-col="0" style="background-color:#22c55e; grid-row:11; grid-column:1;">Arm<br>1</div>
+        <div class="pad rect-h arm-pad" data-col="1" style="background-color:#22c55e; grid-row:11; grid-column:2;">Arm<br>2</div>
+        <div class="pad rect-h arm-pad" data-col="2" style="background-color:#22c55e; grid-row:11; grid-column:3;">Arm<br>3</div>
+        <div class="pad rect-h arm-pad" data-col="3" style="background-color:#22c55e; grid-row:11; grid-column:4;">Arm<br>4</div>
+        <div class="pad rect-h arm-pad" data-col="4" style="background-color:#22c55e; grid-row:11; grid-column:5;">Arm<br>5</div>
+        <div class="pad rect-h arm-pad" data-col="5" style="background-color:#22c55e; grid-row:11; grid-column:6;">Arm<br>6</div>
+        <div class="pad rect-h arm-pad" data-col="6" style="background-color:#22c55e; grid-row:11; grid-column:7;">Arm<br>7</div>
+        <div class="pad rect-h arm-pad" data-col="7" style="background-color:#22c55e; grid-row:11; grid-column:8;">Arm<br>8</div>
 
-        <!-- Mute row (row 7, cols 2..9) — 8 cells. -->
-        <div class="pad rect-h mute-pad" data-col="0" style="background-color:#f59e0b; grid-row:7; grid-column:2;">Mute<br>1</div>
-        <div class="pad rect-h mute-pad" data-col="1" style="background-color:#f59e0b; grid-row:7; grid-column:3;">Mute<br>2</div>
-        <div class="pad rect-h mute-pad" data-col="2" style="background-color:#f59e0b; grid-row:7; grid-column:4;">Mute<br>3</div>
-        <div class="pad rect-h mute-pad" data-col="3" style="background-color:#f59e0b; grid-row:7; grid-column:5;">Mute<br>4</div>
-        <div class="pad rect-h mute-pad" data-col="4" style="background-color:#f59e0b; grid-row:7; grid-column:6;">Mute<br>5</div>
-        <div class="pad rect-h mute-pad" data-col="5" style="background-color:#f59e0b; grid-row:7; grid-column:7;">Mute<br>6</div>
-        <div class="pad rect-h mute-pad" data-col="6" style="background-color:#f59e0b; grid-row:7; grid-column:8;">Mute<br>7</div>
-        <div class="pad rect-h mute-pad" data-col="7" style="background-color:#f59e0b; grid-row:7; grid-column:9;">Mute<br>8</div>
+        <!-- Channel sliders (rows 12..13 spanning 2 rows, cols 1..8) +
+             Master fader (rows 12..13, col 9). -->
+        <div class="pad slider-pad" data-col="0" style="grid-row:12 / span 2; grid-column:1;">Vol<br>1</div>
+        <div class="pad slider-pad" data-col="1" style="grid-row:12 / span 2; grid-column:2;">Vol<br>2</div>
+        <div class="pad slider-pad" data-col="2" style="grid-row:12 / span 2; grid-column:3;">Vol<br>3</div>
+        <div class="pad slider-pad" data-col="3" style="grid-row:12 / span 2; grid-column:4;">Vol<br>4</div>
+        <div class="pad slider-pad" data-col="4" style="grid-row:12 / span 2; grid-column:5;">Vol<br>5</div>
+        <div class="pad slider-pad" data-col="5" style="grid-row:12 / span 2; grid-column:6;">Vol<br>6</div>
+        <div class="pad slider-pad" data-col="6" style="grid-row:12 / span 2; grid-column:7;">Vol<br>7</div>
+        <div class="pad slider-pad" data-col="7" style="grid-row:12 / span 2; grid-column:8;">Vol<br>8</div>
+        <div class="pad slider-pad master-slider" style="grid-row:12 / span 2; grid-column:9;">Master<br>Vol</div>
 
-        <!-- Activator/Arm row (row 8, cols 2..9) — 8 cells.
-             I-03/I-04 fix: hardware-present but script-doesn't-claim (DOC-08).
-             Plan 04 repaints to velocity selectors in StepSequencer mode.
-             Source: StepSequencerComponent.py:461-487 → set_velocity_buttons
-             ← arm_buttons in APC_64_40_9.py:191. -->
-        <div class="pad rect-h arm-pad" data-col="0" style="grid-row:8; grid-column:2;">Arm<br>1</div>
-        <div class="pad rect-h arm-pad" data-col="1" style="grid-row:8; grid-column:3;">Arm<br>2</div>
-        <div class="pad rect-h arm-pad" data-col="2" style="grid-row:8; grid-column:4;">Arm<br>3</div>
-        <div class="pad rect-h arm-pad" data-col="3" style="grid-row:8; grid-column:5;">Arm<br>4</div>
-        <div class="pad rect-h arm-pad" data-col="4" style="grid-row:8; grid-column:6;">Arm<br>5</div>
-        <div class="pad rect-h arm-pad" data-col="5" style="grid-row:8; grid-column:7;">Arm<br>6</div>
-        <div class="pad rect-h arm-pad" data-col="6" style="grid-row:8; grid-column:8;">Arm<br>7</div>
-        <div class="pad rect-h arm-pad" data-col="7" style="grid-row:8; grid-column:9;">Arm<br>8</div>
+        <!-- Cue Level knob (row 14, col 9) — between PADS region and FX region per APC40 hardware. -->
+        <div class="pad cue-level-knob" id="cue-level" style="grid-row:14; grid-column:9;">Cue<br>Level</div>
 
-        <!-- Clip launch grid (rows 9..13, cols 2..9) — 5×8 = 40 pads.
-             Plan 04 repaints per matrix mode. -->
-        <div class="pad grid-pad" data-row="0" data-col="0" style="background-color:#2563eb; grid-row:9;  grid-column:2;">T1<br>S1</div>
-        <div class="pad grid-pad" data-row="0" data-col="1" style="background-color:#2563eb; grid-row:9;  grid-column:3;">T2<br>S1</div>
-        <div class="pad grid-pad" data-row="0" data-col="2" style="background-color:#2563eb; grid-row:9;  grid-column:4;">T3<br>S1</div>
-        <div class="pad grid-pad" data-row="0" data-col="3" style="background-color:#2563eb; grid-row:9;  grid-column:5;">T4<br>S1</div>
-        <div class="pad grid-pad" data-row="0" data-col="4" style="background-color:#2563eb; grid-row:9;  grid-column:6;">T5<br>S1</div>
-        <div class="pad grid-pad" data-row="0" data-col="5" style="background-color:#2563eb; grid-row:9;  grid-column:7;">T6<br>S1</div>
-        <div class="pad grid-pad" data-row="0" data-col="6" style="background-color:#2563eb; grid-row:9;  grid-column:8;">T7<br>S1</div>
-        <div class="pad grid-pad" data-row="0" data-col="7" style="background-color:#2563eb; grid-row:9;  grid-column:9;">T8<br>S1</div>
-        <div class="pad grid-pad" data-row="1" data-col="0" style="background-color:#2563eb; grid-row:10; grid-column:2;">T1<br>S2</div>
-        <div class="pad grid-pad" data-row="1" data-col="1" style="background-color:#2563eb; grid-row:10; grid-column:3;">T2<br>S2</div>
-        <div class="pad grid-pad" data-row="1" data-col="2" style="background-color:#2563eb; grid-row:10; grid-column:4;">T3<br>S2</div>
-        <div class="pad grid-pad" data-row="1" data-col="3" style="background-color:#2563eb; grid-row:10; grid-column:5;">T4<br>S2</div>
-        <div class="pad grid-pad" data-row="1" data-col="4" style="background-color:#2563eb; grid-row:10; grid-column:6;">T5<br>S2</div>
-        <div class="pad grid-pad" data-row="1" data-col="5" style="background-color:#2563eb; grid-row:10; grid-column:7;">T6<br>S2</div>
-        <div class="pad grid-pad" data-row="1" data-col="6" style="background-color:#2563eb; grid-row:10; grid-column:8;">T7<br>S2</div>
-        <div class="pad grid-pad" data-row="1" data-col="7" style="background-color:#2563eb; grid-row:10; grid-column:9;">T8<br>S2</div>
-        <div class="pad grid-pad" data-row="2" data-col="0" style="background-color:#2563eb; grid-row:11; grid-column:2;">T1<br>S3</div>
-        <div class="pad grid-pad" data-row="2" data-col="1" style="background-color:#2563eb; grid-row:11; grid-column:3;">T2<br>S3</div>
-        <div class="pad grid-pad" data-row="2" data-col="2" style="background-color:#2563eb; grid-row:11; grid-column:4;">T3<br>S3</div>
-        <div class="pad grid-pad" data-row="2" data-col="3" style="background-color:#2563eb; grid-row:11; grid-column:5;">T4<br>S3</div>
-        <div class="pad grid-pad" data-row="2" data-col="4" style="background-color:#2563eb; grid-row:11; grid-column:6;">T5<br>S3</div>
-        <div class="pad grid-pad" data-row="2" data-col="5" style="background-color:#2563eb; grid-row:11; grid-column:7;">T6<br>S3</div>
-        <div class="pad grid-pad" data-row="2" data-col="6" style="background-color:#2563eb; grid-row:11; grid-column:8;">T7<br>S3</div>
-        <div class="pad grid-pad" data-row="2" data-col="7" style="background-color:#2563eb; grid-row:11; grid-column:9;">T8<br>S3</div>
-        <div class="pad grid-pad" data-row="3" data-col="0" style="background-color:#2563eb; grid-row:12; grid-column:2;">T1<br>S4</div>
-        <div class="pad grid-pad" data-row="3" data-col="1" style="background-color:#2563eb; grid-row:12; grid-column:3;">T2<br>S4</div>
-        <div class="pad grid-pad" data-row="3" data-col="2" style="background-color:#2563eb; grid-row:12; grid-column:4;">T3<br>S4</div>
-        <div class="pad grid-pad" data-row="3" data-col="3" style="background-color:#2563eb; grid-row:12; grid-column:5;">T4<br>S4</div>
-        <div class="pad grid-pad" data-row="3" data-col="4" style="background-color:#2563eb; grid-row:12; grid-column:6;">T5<br>S4</div>
-        <div class="pad grid-pad" data-row="3" data-col="5" style="background-color:#2563eb; grid-row:12; grid-column:7;">T6<br>S4</div>
-        <div class="pad grid-pad" data-row="3" data-col="6" style="background-color:#2563eb; grid-row:12; grid-column:8;">T7<br>S4</div>
-        <div class="pad grid-pad" data-row="3" data-col="7" style="background-color:#2563eb; grid-row:12; grid-column:9;">T8<br>S4</div>
-        <div class="pad grid-pad" data-row="4" data-col="0" style="background-color:#2563eb; grid-row:13; grid-column:2;">T1<br>S5</div>
-        <div class="pad grid-pad" data-row="4" data-col="1" style="background-color:#2563eb; grid-row:13; grid-column:3;">T2<br>S5</div>
-        <div class="pad grid-pad" data-row="4" data-col="2" style="background-color:#2563eb; grid-row:13; grid-column:4;">T3<br>S5</div>
-        <div class="pad grid-pad" data-row="4" data-col="3" style="background-color:#2563eb; grid-row:13; grid-column:5;">T4<br>S5</div>
-        <div class="pad grid-pad" data-row="4" data-col="4" style="background-color:#2563eb; grid-row:13; grid-column:6;">T5<br>S5</div>
-        <div class="pad grid-pad" data-row="4" data-col="5" style="background-color:#2563eb; grid-row:13; grid-column:7;">T6<br>S5</div>
-        <div class="pad grid-pad" data-row="4" data-col="6" style="background-color:#2563eb; grid-row:13; grid-column:8;">T7<br>S5</div>
-        <div class="pad grid-pad" data-row="4" data-col="7" style="background-color:#2563eb; grid-row:13; grid-column:9;">T8<br>S5</div>
+        <!-- ==================================================================
+             RIGHT ZONE (cols 11..14, plus cursor cluster cols 15..16)
+             — TRACK CONTROL, FX, transport, crossfader
+             ================================================================== -->
 
-        <!-- Scene Launch column (col 10, rows 9..13) — 5 cells. -->
-        <div class="pad rect-h scene-launch" data-row="0" style="background-color:#10b981; grid-row:9;  grid-column:10;">Scene<br>1</div>
-        <div class="pad rect-h scene-launch" data-row="1" style="background-color:#10b981; grid-row:10; grid-column:10;">Scene<br>2</div>
-        <div class="pad rect-h scene-launch" data-row="2" style="background-color:#10b981; grid-row:11; grid-column:10;">Scene<br>3</div>
-        <div class="pad rect-h scene-launch" data-row="3" style="background-color:#10b981; grid-row:12; grid-column:10;">Scene<br>4</div>
-        <div class="pad rect-h scene-launch" data-row="4" style="background-color:#10b981; grid-row:13; grid-column:10;">Scene<br>5</div>
+        <!-- Top encoders T1..T4 (row 2, cols 11..14) + ring LEDs (row 3). -->
+        <div class="pad encoder-pad top-encoder" data-col="0" style="grid-row:2; grid-column:11;">T1</div>
+        <div class="pad encoder-pad top-encoder" data-col="1" style="grid-row:2; grid-column:12;">T2</div>
+        <div class="pad encoder-pad top-encoder" data-col="2" style="grid-row:2; grid-column:13;">T3</div>
+        <div class="pad encoder-pad top-encoder" data-col="3" style="grid-row:2; grid-column:14;">T4</div>
+        <div class="pad encoder-ring top-encoder-ring" data-col="0" style="grid-row:3; grid-column:11;">○</div>
+        <div class="pad encoder-ring top-encoder-ring" data-col="1" style="grid-row:3; grid-column:12;">○</div>
+        <div class="pad encoder-ring top-encoder-ring" data-col="2" style="grid-row:3; grid-column:13;">○</div>
+        <div class="pad encoder-ring top-encoder-ring" data-col="3" style="grid-row:3; grid-column:14;">○</div>
 
-        <!-- Track Stop row (row 14, cols 2..9) — 8 cells. -->
-        <div class="pad rect-h track-stop" data-col="0" style="background-color:#94a3b8; grid-row:14; grid-column:2;">Stop<br>1</div>
-        <div class="pad rect-h track-stop" data-col="1" style="background-color:#94a3b8; grid-row:14; grid-column:3;">Stop<br>2</div>
-        <div class="pad rect-h track-stop" data-col="2" style="background-color:#94a3b8; grid-row:14; grid-column:4;">Stop<br>3</div>
-        <div class="pad rect-h track-stop" data-col="3" style="background-color:#94a3b8; grid-row:14; grid-column:5;">Stop<br>4</div>
-        <div class="pad rect-h track-stop" data-col="4" style="background-color:#94a3b8; grid-row:14; grid-column:6;">Stop<br>5</div>
-        <div class="pad rect-h track-stop" data-col="5" style="background-color:#94a3b8; grid-row:14; grid-column:7;">Stop<br>6</div>
-        <div class="pad rect-h track-stop" data-col="6" style="background-color:#94a3b8; grid-row:14; grid-column:8;">Stop<br>7</div>
-        <div class="pad rect-h track-stop" data-col="7" style="background-color:#94a3b8; grid-row:14; grid-column:9;">Stop<br>8</div>
+        <!-- Top encoders T5..T8 (row 4, cols 11..14) + ring LEDs (row 5). -->
+        <div class="pad encoder-pad top-encoder" data-col="4" style="grid-row:4; grid-column:11;">T5</div>
+        <div class="pad encoder-pad top-encoder" data-col="5" style="grid-row:4; grid-column:12;">T6</div>
+        <div class="pad encoder-pad top-encoder" data-col="6" style="grid-row:4; grid-column:13;">T7</div>
+        <div class="pad encoder-pad top-encoder" data-col="7" style="grid-row:4; grid-column:14;">T8</div>
+        <div class="pad encoder-ring top-encoder-ring" data-col="4" style="grid-row:5; grid-column:11;">○</div>
+        <div class="pad encoder-ring top-encoder-ring" data-col="5" style="grid-row:5; grid-column:12;">○</div>
+        <div class="pad encoder-ring top-encoder-ring" data-col="6" style="grid-row:5; grid-column:13;">○</div>
+        <div class="pad encoder-ring top-encoder-ring" data-col="7" style="grid-row:5; grid-column:14;">○</div>
 
-        <!-- Stop-All-Clips (col 10, row 14). -->
-        <div class="pad rect-h stop-all-pad" style="grid-row:14; grid-column:10;">Stop All<br>Clips</div>
+        <!-- PAN / SEND A / SEND B / SEND C physical buttons (row 6, cols 11..14).
+             These are the on-hardware encoder-mode select buttons; the mode-strip
+             above the device is a separate clickable mode dispatcher. -->
+        <div class="pad rect-h pan-send-btn" data-mode="Pan"   style="grid-row:6; grid-column:11;">Pan</div>
+        <div class="pad rect-h pan-send-btn" data-mode="SendA" style="grid-row:6; grid-column:12;">Send A</div>
+        <div class="pad rect-h pan-send-btn" data-mode="SendB" style="grid-row:6; grid-column:13;">Send B</div>
+        <div class="pad rect-h pan-send-btn" data-mode="SendC" style="grid-row:6; grid-column:14;">Send C</div>
 
-        <!-- Sliders (row 15) — 8 channel + master, non-interactive per D-07. -->
-        <div class="pad slider-pad" data-col="0" style="grid-row:15; grid-column:2;">Vol<br>1</div>
-        <div class="pad slider-pad" data-col="1" style="grid-row:15; grid-column:3;">Vol<br>2</div>
-        <div class="pad slider-pad" data-col="2" style="grid-row:15; grid-column:4;">Vol<br>3</div>
-        <div class="pad slider-pad" data-col="3" style="grid-row:15; grid-column:5;">Vol<br>4</div>
-        <div class="pad slider-pad" data-col="4" style="grid-row:15; grid-column:6;">Vol<br>5</div>
-        <div class="pad slider-pad" data-col="5" style="grid-row:15; grid-column:7;">Vol<br>6</div>
-        <div class="pad slider-pad" data-col="6" style="grid-row:15; grid-column:8;">Vol<br>7</div>
-        <div class="pad slider-pad" data-col="7" style="grid-row:15; grid-column:9;">Vol<br>8</div>
-        <div class="pad slider-pad master-slider" style="grid-row:15; grid-column:10;">Master<br>Vol</div>
+        <!-- SHIFT (col 15, row 2) + TAP TEMPO (col 16, row 2). -->
+        <div class="pad rect-h shift-pad" id="shift-button" style="background-color:#a855f7; grid-row:2; grid-column:15;">SHIFT</div>
+        <div class="pad rect-h transport-pad" data-transport="Tap" style="grid-row:2; grid-column:16;">Tap</div>
 
-        <!-- Transport row (row 16, cols 2..8) — Play / Stop / Rec / Tap / Nudge ↑ / Nudge ↓ / Detail. -->
-        <div class="pad rect-h transport-pad" data-transport="Play"    style="grid-row:16; grid-column:2;">Play</div>
-        <div class="pad rect-h transport-pad" data-transport="Stop"    style="grid-row:16; grid-column:3;">Stop</div>
-        <div class="pad rect-h transport-pad" data-transport="Rec"     style="grid-row:16; grid-column:4;">Rec</div>
-        <div class="pad rect-h transport-pad" data-transport="Tap"     style="grid-row:16; grid-column:5;">Tap</div>
-        <div class="pad rect-h transport-pad" data-transport="Nudge ↑" style="grid-row:16; grid-column:6;">Nudge ↑</div>
-        <div class="pad rect-h transport-pad" data-transport="Nudge ↓" style="grid-row:16; grid-column:7;">Nudge ↓</div>
-        <div class="pad rect-h transport-pad" data-transport="Detail"  style="grid-row:16; grid-column:8;">Detail</div>
+        <!-- SELECT cursor pad cluster (cols 15..16, rows 3..5).
+             cursor-LEFT and cursor-RIGHT carry data-nav="prev"/"next" so the
+             existing track-nav tooltip wiring continues to work; cursor-UP/DOWN
+             are scene navigation. -->
+        <div class="pad cursor-pad" id="cursor-up" style="grid-row:3; grid-column:15;">▲</div>
+        <div class="pad cursor-pad track-nav" data-nav="prev" id="cursor-left" style="grid-row:4; grid-column:15;">◀</div>
+        <div class="pad cursor-pad" id="cursor-down" style="grid-row:5; grid-column:15;">▼</div>
+        <div class="pad cursor-pad track-nav" data-nav="next" id="cursor-right" style="grid-row:3; grid-column:16;">▶</div>
 
-        <!-- Crossfader (row 16, cols 9..10) — non-interactive per D-07. -->
-        <div class="pad crossfader-pad" style="grid-row:16; grid-column:9 / span 2;">Crossfader</div>
+        <!-- NUDGE - / NUDGE + (col 16, rows 4..5). -->
+        <div class="pad rect-h transport-pad" data-transport="Nudge ↓" style="grid-row:4; grid-column:16;">Nudge -</div>
+        <div class="pad rect-h transport-pad" data-transport="Nudge ↑" style="grid-row:5; grid-column:16;">Nudge +</div>
+
+        <!-- Device encoders D1..D4 (row 8, cols 11..14) + ring LEDs (row 9). -->
+        <div class="pad encoder-pad device-encoder" data-col="0" style="grid-row:8; grid-column:11;">D1</div>
+        <div class="pad encoder-pad device-encoder" data-col="1" style="grid-row:8; grid-column:12;">D2</div>
+        <div class="pad encoder-pad device-encoder" data-col="2" style="grid-row:8; grid-column:13;">D3</div>
+        <div class="pad encoder-pad device-encoder" data-col="3" style="grid-row:8; grid-column:14;">D4</div>
+        <div class="pad encoder-ring device-encoder-ring" data-col="0" style="grid-row:9; grid-column:11;">○</div>
+        <div class="pad encoder-ring device-encoder-ring" data-col="1" style="grid-row:9; grid-column:12;">○</div>
+        <div class="pad encoder-ring device-encoder-ring" data-col="2" style="grid-row:9; grid-column:13;">○</div>
+        <div class="pad encoder-ring device-encoder-ring" data-col="3" style="grid-row:9; grid-column:14;">○</div>
+
+        <!-- Device encoders D5..D8 (row 10, cols 11..14) + ring LEDs (row 11). -->
+        <div class="pad encoder-pad device-encoder" data-col="4" style="grid-row:10; grid-column:11;">D5</div>
+        <div class="pad encoder-pad device-encoder" data-col="5" style="grid-row:10; grid-column:12;">D6</div>
+        <div class="pad encoder-pad device-encoder" data-col="6" style="grid-row:10; grid-column:13;">D7</div>
+        <div class="pad encoder-pad device-encoder" data-col="7" style="grid-row:10; grid-column:14;">D8</div>
+        <div class="pad encoder-ring device-encoder-ring" data-col="4" style="grid-row:11; grid-column:11;">○</div>
+        <div class="pad encoder-ring device-encoder-ring" data-col="5" style="grid-row:11; grid-column:12;">○</div>
+        <div class="pad encoder-ring device-encoder-ring" data-col="6" style="grid-row:11; grid-column:13;">○</div>
+        <div class="pad encoder-ring device-encoder-ring" data-col="7" style="grid-row:11; grid-column:14;">○</div>
+
+        <!-- CLIP/TRACK + DEVICE ON/OFF + bank ◀ / bank ▶ (row 12, cols 11..14).
+             Source: APC40 hardware row beneath device-control encoders. -->
+        <div class="pad rect-h device-bank-nav" data-idx="0" style="grid-row:12; grid-column:11;">Clip/<br>Track</div>
+        <div class="pad rect-h device-bank-nav" data-idx="1" style="grid-row:12; grid-column:12;">Dev<br>On/Off</div>
+        <div class="pad rect-h device-bank-nav" data-idx="2" style="grid-row:12; grid-column:13;">◀ Bank</div>
+        <div class="pad rect-h device-bank-nav" data-idx="3" style="grid-row:12; grid-column:14;">Bank ▶</div>
+
+        <!-- DETAIL VIEW / REC QUANT / MIDI OVERDUB / METRONOME (row 13, cols 11..14). -->
+        <div class="pad rect-h transport-pad detail-row-btn" data-transport="Detail"  style="grid-row:13; grid-column:11;">Detail<br>View</div>
+        <div class="pad rect-h transport-pad detail-row-btn" data-transport="RecQuant"     style="grid-row:13; grid-column:12;">Rec<br>Quant</div>
+        <div class="pad rect-h transport-pad detail-row-btn" data-transport="MidiOverdub"  style="grid-row:13; grid-column:13;">MIDI<br>Overdub</div>
+        <div class="pad rect-h transport-pad detail-row-btn" data-transport="Metronome"    style="grid-row:13; grid-column:14;">Metro</div>
+
+        <!-- PLAY / STOP / REC (row 14, cols 11..13) — bottom-right transport cluster. -->
+        <div class="pad rect-h transport-pad" data-transport="Play" style="grid-row:14; grid-column:11;">Play</div>
+        <div class="pad rect-h transport-pad" data-transport="Stop" style="grid-row:14; grid-column:12;">Stop</div>
+        <div class="pad rect-h transport-pad" data-transport="Rec"  style="grid-row:14; grid-column:13;">Rec</div>
+
+        <!-- Crossfader (row 15, cols 11..14) — wide horizontal, BELOW transport per
+             user reference image. Non-interactive per D-07. -->
+        <div class="pad crossfader-pad" style="grid-row:15; grid-column:11 / span 4;">Crossfader</div>
 
     </div>
 
@@ -688,6 +778,18 @@
                 addTooltipEvents(el, () => {
                     const def = encoderModeDefinitions[currentEncoderMode];
                     return def && def.ringTip ? def.ringTip(c) : '';
+                });
+            });
+
+            // Device-encoder rings (added in layout overhaul to match APC40 hardware).
+            // Mirror the ringTip pattern but tag as the lower (device) row.
+            document.querySelectorAll('.device-encoder-ring').forEach(el => {
+                const c = parseInt(el.dataset.col, 10);
+                addTooltipEvents(el, () => {
+                    const def = encoderModeDefinitions[currentEncoderMode];
+                    return def && def.ringTip
+                        ? def.ringTip(c) + '<div class="related">Device-encoder ring (lower row).</div>'
+                        : 'Device-encoder LED ring ' + (c + 1) + ' — value indicator for the encoder above.';
                 });
             });
 
@@ -851,6 +953,33 @@
             document.querySelectorAll('.stop-all-pad').forEach(el => {
                 addTooltipEvents(el, () => `<strong>Stop All Clips</strong>Stops all currently playing clips.`);
             });
+
+            // Track-Selection row (8 buttons + Master) — added in layout overhaul.
+            // Source: APC40 hardware row between clip-stop and solo/mute/arm.
+            document.querySelectorAll('.track-select-pad').forEach(el => {
+                const c = parseInt(el.dataset.col, 10);
+                addTooltipEvents(el, () => `<strong>Track Select ${c + 1}</strong>Selects track ${c + 1} as the current track. Drives device-encoder follow-selection (when not locked) and selects the channel strip context.`);
+            });
+
+            // Pan / Send A / Send B / Send C physical buttons (under top encoders).
+            // These mirror the encoder-mode-strip selectors but are the on-hardware
+            // buttons. Tooltip text mirrors the mode-strip-btn equivalents.
+            document.querySelectorAll('.pan-send-btn').forEach(el => {
+                const mode = el.dataset.mode;
+                addTooltipEvents(el, () => `<strong>${mode}</strong>Encoder-mode select button (on-hardware). Short press toggles encoder mode; long press (≥400ms) acts momentary and reverts on release. Source: EncModeSelectorComponent.py:9-10 (LONG_PRESS_DELAY = 4 ticks × 100ms = 400ms).`);
+            });
+
+            // SELECT cursor pad (UP / DOWN / LEFT / RIGHT) — added in layout overhaul.
+            // cursor-LEFT / cursor-RIGHT also carry data-nav so the existing track-nav
+            // tooltip wiring (above) handles them. UP / DOWN are scene navigation.
+            const cUp = document.getElementById('cursor-up');
+            if (cUp) addTooltipEvents(cUp, () => '<strong>▲ Scene Up</strong>Move scene focus up by one row in the session view.');
+            const cDown = document.getElementById('cursor-down');
+            if (cDown) addTooltipEvents(cDown, () => '<strong>▼ Scene Down</strong>Move scene focus down by one row in the session view.');
+
+            // Cue Level knob — added in layout overhaul. Stock APC40 hardware control.
+            const cue = document.getElementById('cue-level');
+            if (cue) addTooltipEvents(cue, () => '<strong>Cue Level</strong>Hardware knob — sets the headphone cue output level (Live mixer pre-fader cue volume). Not script-mapped.');
 
             // Shift button. Plan 05: full Shift overlay reassignment list
             // including Shift+Nudge Back lock-to-device (DOC-07) and
