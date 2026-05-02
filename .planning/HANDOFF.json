@@ -1,24 +1,89 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-04T17:22:58.619Z",
-  "phase": null,
-  "phase_name": null,
-  "phase_dir": null,
+  "timestamp": "2026-05-02T12:42:56.096Z",
+  "context": "phase",
+  "phase": "06",
+  "phase_name": "create-user-manual",
+  "phase_dir": ".planning/phases/06-create-user-manual",
   "plan": null,
   "task": null,
-  "total_tasks": null,
-  "status": "milestone_complete",
-  "completed_tasks": [],
-  "remaining_tasks": [],
-  "blockers": [],
-  "human_actions_pending": [],
-  "decisions": [
-    {"decision": "Sequential _parameter_banks() override in Pan16DeviceComponent", "rationale": "Framework column-major interleaving gives wrong param order", "phase": "4"},
-    {"decision": "Init order: Pan16 components created before set_controls()", "rationale": "update() triggered by set_controls() needs Pan16 references to exist", "phase": "4"},
-    {"decision": "Pass tuple() not None to ShiftableDeviceComponent.set_parameter_controls()", "rationale": "ChannelTranslationSelector.set_controls_to_translate() cannot iterate None", "phase": "4"},
-    {"decision": "Send long-press always reverts to Pan (mode 0)", "rationale": "Simpler than tracking previous mode", "phase": "5"}
+  "total_tasks": 8,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": "06-01", "name": "scaffold docs/manual.html (CSS palette + tooltip JS + 3 mode-strip stubs)", "status": "done", "commit": "837ce6a"},
+    {"id": "06-02", "name": "build APC40 hardware layout in docs/manual.html (rescue commit for SUMMARY)", "status": "done", "commit": "7e1d684"},
+    {"id": "06-03", "name": "wire encoder mode strip + setEncoderMode() repaint", "status": "done", "commit": "ff41370"},
+    {"id": "06-04", "name": "wire matrix mode strip behavior + Matrix_Maps.py format reference", "status": "done", "commit": "781380f"},
+    {"id": "06-05", "name": "wire modifier-overlay strip + DOC-03/05/06/07 tooltips", "status": "done", "commit": "0d93c8e"},
+    {"id": "06-06", "name": "create gen_apc40_layout.py + apc40-layout.svg", "status": "done", "commit": "8625243"},
+    {"id": "06-07", "name": "write INSTALL.md and TROUBLESHOOTING.md", "status": "done", "commit": "7a25a2a"},
+    {"id": "06-08", "name": "rewrite README.md to thin entry pointer", "status": "done", "commit": "5d94f5c"},
+    {"id": "06-gap-layout", "name": "overhaul APC40 layout in manual.html + SVG to match user reference image", "status": "done", "commit": "e5f067e"}
   ],
-  "uncommitted_files": [],
-  "next_action": "Start next milestone with /gsd:new-milestone. Domain expertise skill for Ableton Live scripting is now available at ~/.claude/skills/expertise/ableton-live-scripting/",
-  "context_notes": "v1.0 and v1.1 both shipped and verified. 80 tests passing. This session created a comprehensive domain expertise skill (21 files, 4098 lines) covering _Framework API, Live API, MIDI communication, components, elements, listeners, LED feedback, mode/shift patterns, device parameter mapping, deployment/debugging, modern API (v2/v3), advanced patterns (ClyphX, ZCX, raw MIDI), and anti-patterns. Skill sourced from 7 codebases."
+  "remaining_tasks": [
+    {"id": "06-verify-final", "name": "Re-run /gsd-verify-work 6 (or user 'approved') to flip phase verification from human_needed to passed after layout overhaul user-confirmation", "status": "not_started"},
+    {"id": "06-update-roadmap", "name": "Run gsd-tools phase complete 06 to mark phase done in ROADMAP/STATE/REQUIREMENTS, then commit", "status": "not_started"},
+    {"id": "06-update-project-md", "name": "Evolve PROJECT.md after phase completion (active milestone v1.2 -> validated)", "status": "not_started"},
+    {"id": "06-cleanup-readme-bak", "name": "Decide what to do with README.md.bak (untracked backup of pre-v1.2 readme)", "status": "not_started"},
+    {"id": "06-decide-tracked-source", "name": "Decide if untracked source files (APC.py, EncoderEQComponent.py, etc.) should be committed - currently the EncoderEQComponent.py fix from the debug session lives on disk but is NOT in git history", "status": "not_started"}
+  ],
+  "blockers": [
+    {
+      "description": "Layout overhaul (commit e5f067e) is committed but not yet user-confirmed. Resuming agent must wait for user feedback in browser before flipping verification status.",
+      "type": "human_action",
+      "workaround": "User opens docs/manual.html, compares to APC40, reports any remaining mismatch."
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Open docs/manual.html in a browser; compare against actual APC40 hardware; report any remaining mismatch or say 'approved'",
+      "context": "Phase 6 verification status is human_needed (9/10 must-haves passed; visual/UX correctness routed to human). The layout was rewritten in commit e5f067e to match the user's reference image (2026-05-02), but the user has not yet confirmed the rewrite is correct.",
+      "blocking": true
+    },
+    {
+      "action": "Test in Ableton: select a track with FilterEQ3, hold Shift, press SendB bank button (Note 89), turn the rightmost three top-row encoders - bass/mid/high should now move GainLo/GainMid/GainHi",
+      "context": "The eq-filter-smart-control debug session (.planning/debug/eq-filter-smart-control.md) found and fixed a malformed `raise <bool> or AssertionError` in TrackEQComponent.set_gain_controls (EncoderEQComponent.py:124-138). Fix is on disk but EncoderEQComponent.py is NOT git-tracked.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Bookkeeping commit 1bd5bf6 was created BEFORE phase execution to land the milestone v1.1 -> v1.2 transition that was sitting uncommitted in the working tree (PROJECT.md, REQUIREMENTS.md, config.json updates; archived phase directory deletions; restored MILESTONES.md from HEAD which had been accidentally wiped; tracked .planning/codebase/ + 06-CONTEXT.md + 06-DISCUSSION-LOG.md)",
+      "rationale": "Without this, executor-agent worktrees would have inherited a clean HEAD without these inputs, and worktree merges would have committed the unattributed MILESTONES.md wipe and other pending changes as if they were Phase 6 outputs.",
+      "phase": "06"
+    },
+    {
+      "decision": "Plan 06-02 hit a usage limit AFTER writing 06-02-SUMMARY.md but BEFORE committing it. Orchestrator applied rescue protocol (commit 12ce24c) - committed the SUMMARY from inside the worktree on the agent's behalf, then merged normally.",
+      "rationale": "The implementation commit 7e1d684 (manual.html 304 -> 731 lines) was already on the worktree branch and SUMMARY.md was complete with Self-Check: PASSED. Rescue avoids losing valid work to the worktree-removal step.",
+      "phase": "06"
+    },
+    {
+      "decision": "User reference image for layout came mid-Wave 3 verification cycle. Verifier returned human_needed (9/10) because visual/UX correctness can't be programmatically verified; user immediately responded with the corrected APC40 reference image. This was treated as gap-closure feedback.",
+      "rationale": "The original Plan 06-02 build had the layout essentially inverted (clip grid in middle, encoders as 1x8 strips on the left, missing TRACK SELECTION row, missing Pan/Send physical buttons, missing cursor pad, missing Detail row, missing Cue Level knob, crossfader at wrong position). User chose 'direct rewrite, single commit' over /gsd-plan-phase 6 --gaps for speed.",
+      "phase": "06"
+    },
+    {
+      "decision": "Layout overhaul (commit e5f067e) added 6 new element classes: .pan-send-btn, .cursor-pad, .track-select-pad, .detail-row-btn, .cue-level-knob, .device-encoder-ring. All original data-* attributes preserved verbatim so mode-strip JS contract is honored.",
+      "rationale": "The mode-strip JS at line 1055 (setEncoderMode) and 1367 (setMatrixMode) queries .top-encoder, .device-encoder, .grid-pad, .track-stop, .scene-launch, .solo-pad, .mute-pad, .arm-pad, etc. Renaming any of those would break repaint. Adding new classes is additive and safe.",
+      "phase": "06"
+    },
+    {
+      "decision": "Device-encoder rings use new .device-encoder-ring class (NOT .top-encoder-ring) with their own tooltip block.",
+      "rationale": "JS at line 776 queries .top-encoder-ring and applies top-encoder-mode tooltips. If device rings used the same class, they would get wrong-row tooltips. New class + parallel tooltip wiring (with '(lower row)' tag) keeps content correct.",
+      "phase": "06"
+    },
+    {
+      "decision": "README.md.bak (untracked) preserves pre-v1.2 README content from before plan 06-08 wrote the thin pointer.",
+      "rationale": "Plan 06-08's worktree merge initially failed because untracked README.md was blocking the merge from creating its own README.md. Rename to .bak preserved a backup for diff/comparison rather than deleting.",
+      "phase": "06"
+    }
+  ],
+  "uncommitted_files": [
+    ".planning/debug/eq-filter-smart-control.md (resolved debug session)",
+    ".planning/phases/06-create-user-manual/06-VERIFICATION.md (verifier output)",
+    "README.md.bak (backup of pre-v1.2 readme; user decision pending)",
+    "APC.py, EncoderEQComponent.py, and other root-level *.py files (NEVER tracked in this repo by design)"
+  ],
+  "next_action": "Wait for user feedback on docs/manual.html layout (open in browser, compare to APC40, report mismatch or say 'approved'). If approved: run /gsd-verify-work 6 OR directly run gsd-tools phase complete 06, commit the result, evolve PROJECT.md, and route to next phase / milestone wrap.",
+  "context_notes": "This repo is .planning-only at the top level - source files (APC.py, APC_64_40_9.py, EncoderEQComponent.py, MatrixModesComponent.py, Matrix_Maps.py, etc.) are UNTRACKED at the repo root by design. They live on disk and Ableton Live loads them from the project root, but they're not in git history. Phase 6 deliverables (docs/*, README.md) ARE tracked. The eq-filter-smart-control debug fix landed in EncoderEQComponent.py:124-138 but is NOT in any commit - it's a working-tree-only change to an untracked file. If the user wants the fix versioned, they need a different repo strategy. Phase 6 used worktree isolation for parallel execution (5 waves, 8 plans + 1 gap closure = 32 commits total this session)."
 }
