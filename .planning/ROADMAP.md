@@ -35,9 +35,9 @@ Plans:
 - [x] 06-01-PLAN.md — HTML skeleton + APC40-renamed CSS palette + tooltip JS + three empty mode-strip stubs (DOC-02 foundation)
 
 **Wave 2** *(blocked on Wave 1 — three parallel plans on disjoint files)*
-- [ ] 06-02-PLAN.md — APC40 hardware layout via buildLayout(): clip grid, Track Stop, Solo/Mute, Arm row + master-select, Scene Launch, encoders, sliders, transport, mode-strip stub buttons (DOC-02, DOC-03, DOC-04, DOC-07, DOC-08, DOC-09, DOC-10) — touches docs/manual.html
-- [ ] 06-06-PLAN.md — gen_apc40_layout.py + apc40-layout.svg static printable poster, default state only (DOC-02, DOC-08) — touches docs/gen_apc40_layout.py + docs/apc40-layout.svg
-- [ ] 06-07-PLAN.md — INSTALL.md (Win+Mac walkthrough) + TROUBLESHOOTING.md (5 failure modes) (DOC-01, DOC-08) — touches docs/INSTALL.md + docs/TROUBLESHOOTING.md
+- [x] 06-02-PLAN.md — APC40 hardware layout via buildLayout(): clip grid, Track Stop, Solo/Mute, Arm row + master-select, Scene Launch, encoders, sliders, transport, mode-strip stub buttons (DOC-02, DOC-03, DOC-04, DOC-07, DOC-08, DOC-09, DOC-10) — touches docs/manual.html
+- [x] 06-06-PLAN.md — gen_apc40_layout.py + apc40-layout.svg static printable poster, default state only (DOC-02, DOC-08) — touches docs/gen_apc40_layout.py + docs/apc40-layout.svg
+- [x] 06-07-PLAN.md — INSTALL.md (Win+Mac walkthrough) + TROUBLESHOOTING.md (5 failure modes) (DOC-01, DOC-08) — touches docs/INSTALL.md + docs/TROUBLESHOOTING.md
 
 **Wave 3** *(blocked on Wave 2 — two parallel plans on disjoint files)*
 - [ ] 06-03-PLAN.md — Encoder mode strip: setEncoderMode() + encoderModeDefinitions for Pan/SendA/B/C/User1-3 + encoder/ring/bank-nav tooltips with line-traced source (DOC-02, DOC-03, DOC-04, DOC-06) — touches docs/manual.html
