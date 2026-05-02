@@ -530,6 +530,36 @@
 
     </div>
 
+    <!-- Plan 04 — Matrix_Maps.py format reference (D-06a).
+         Note Mode tooltips link here via <a href="#matrix-maps-format">. -->
+    <section id="matrix-maps-format" style="max-width: 800px; margin: 2rem auto; padding: 1.5rem; background: var(--apc-case); border: 1px solid var(--apc-border); border-radius: 12px;">
+        <h2 style="color: #38bdf8; margin-top: 0;">Customizing Note / User Modes — <code>Matrix_Maps.py</code> format</h2>
+        <p>Note Modes 1–6 and User Modes 1–6 are configured by editing <code>Matrix_Maps.py</code> at the repo root. The file is plain Python — open it in any text editor (avoid tabs for indentation per the file's own header comment, <code>Matrix_Maps.py:22</code>).</p>
+
+        <p>For each mode N (1 through 6), five constants control its behavior:</p>
+        <ul>
+            <li><code>USE_STOP_ROW_N</code> — boolean. <code>True</code> joins the Track Stop row to the grid as a 6th row of pads. <code>False</code> leaves Track Stop on its native clip-stop function.</li>
+            <li><code>IS_NOTE_MODE_N</code> — boolean. <code>True</code> sends MIDI notes (Note Mode). <code>False</code> does not (User Mode — pads still light per <code>PATTERN_N</code>, but no MIDI is emitted).</li>
+            <li><code>PATTERN_N</code> — 6 rows × 8 columns of LED color codes (legend from <code>Matrix_Maps.py:37</code>):
+                <ul>
+                    <li><code>0</code> = off</li>
+                    <li><code>1</code> = green</li>
+                    <li><code>2</code> = green blink</li>
+                    <li><code>3</code> = red</li>
+                    <li><code>4</code> = red blink</li>
+                    <li><code>5</code> = yellow</li>
+                    <li><code>6</code> = yellow blink</li>
+                    <li><code>7</code>–<code>127</code> = green</li>
+                </ul>
+                The 6th row is the Track Stop row (used only when <code>USE_STOP_ROW_N</code> is True). Track Stop hardware only displays <code>0</code> = off or <code>1</code>–<code>127</code> = green.
+            </li>
+            <li><code>CHANNEL_N</code> — int 0–15 (MIDI channels 1–16). Channels 0–8 should be avoided to prevent conflict with the APC40's native mappings (per <code>Matrix_Maps.py:50–51</code>).</li>
+            <li><code>NOTEMAP_N</code> — 6 rows × 8 columns of MIDI note values 0–127. Each cell maps to a MIDI note for that pad.</li>
+        </ul>
+
+        <p>After editing, restart Live (or re-select the script in MIDI prefs) to load the new values. The file also contains a <code>PAD_TRANSLATIONS</code> array near the bottom — a 4×4 Drum Rack pad translation table (LiveAPI limit: only one drum rack at a time, max 4×4).</p>
+    </section>
+
     <div id="tooltip"></div>
 
     <script>
@@ -654,43 +684,74 @@
                 });
             });
 
-            // Solo row (8 cells).
+            // Solo row (8 cells). Plan 04: matrix-mode aware (StepSequencer
+            // mode repurposes Solo to Loop Start). Plan 05 will replace the
+            // default branch with the toggle/momentary unified tooltip.
             document.querySelectorAll('.solo-pad').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
-                addTooltipEvents(el, () => `<strong>Solo (Track ${c + 1})</strong>Toggle / Momentary — see modifier overlay tooltips for the unified model (Plan 05).`);
+                addTooltipEvents(el, () => {
+                    const def = matrixModeDefinitions[currentMatrixMode];
+                    if (def && def.soloOverride) {
+                        return def.soloOverride.tip(c);
+                    }
+                    return `<strong>Solo (Track ${c + 1})</strong>Toggle / Momentary — see modifier overlay tooltips for the unified model (Plan 05).`;
+                });
             });
 
-            // Mute row (8 cells).
+            // Mute row (8 cells). Plan 04: matrix-mode aware (StepSequencer
+            // mode repurposes Mute to Loop Length).
             document.querySelectorAll('.mute-pad').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
-                addTooltipEvents(el, () => `<strong>Mute (Track ${c + 1})</strong>Toggle / Momentary — see modifier overlay tooltips for the unified model (Plan 05).`);
+                addTooltipEvents(el, () => {
+                    const def = matrixModeDefinitions[currentMatrixMode];
+                    if (def && def.muteOverride) {
+                        return def.muteOverride.tip(c);
+                    }
+                    return `<strong>Mute (Track ${c + 1})</strong>Toggle / Momentary — see modifier overlay tooltips for the unified model (Plan 05).`;
+                });
             });
 
-            // Activator/Arm row — I-03/I-04 fix. Source:
+            // Activator/Arm row — I-03/I-04 fix. Plan 04 repaints to velocity
+            // selector in StepSequencer mode. Source:
             // StepSequencerComponent.py:461-487 wired in APC_64_40_9.py:191.
             document.querySelectorAll('.arm-pad').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
-                addTooltipEvents(el, () => `<strong>Activator / Arm-record button — Track ${c + 1}</strong>Present on APC40 hardware but not mapped by this script (DOC-08). Becomes a velocity selector in StepSequencer mode (5 levels distributed across the row). Source: StepSequencerComponent.py:461-487 wired in APC_64_40_9.py:191.`);
+                addTooltipEvents(el, () => {
+                    const def = matrixModeDefinitions[currentMatrixMode];
+                    if (def && def.armOverride) {
+                        return def.armOverride.tip(c);
+                    }
+                    return `<strong>Activator / Arm-record button — Track ${c + 1}</strong>Present on APC40 hardware but not mapped by this script (DOC-08). Becomes a velocity selector in StepSequencer mode (5 levels distributed across the row). Source: StepSequencerComponent.py:461-487 wired in APC_64_40_9.py:191.`;
+                });
             });
 
-            // 5×8 clip launch grid (40 pads). Plan 04 repaints per matrix mode.
+            // 5×8 clip launch grid (40 pads). Plan 04 — matrix-mode aware.
             document.querySelectorAll('.grid-pad').forEach(el => {
                 const r = parseInt(el.dataset.row, 10);
                 const c = parseInt(el.dataset.col, 10);
-                addTooltipEvents(el, () => `<strong>Clip slot — Track ${c + 1}, Scene ${r + 1}</strong>Behavior depends on the active matrix mode (Plan 04 wires this).`);
+                addTooltipEvents(el, () => {
+                    const def = matrixModeDefinitions[currentMatrixMode];
+                    return def && def.gridTip ? def.gridTip(r, c) : '';
+                });
             });
 
             // Track Stop row (8 cells). Doubles as Note/User Mode bottom row
-            // when USE_STOP_ROW is True.
+            // when USE_STOP_ROW is True. Plan 04 — matrix-mode aware.
             document.querySelectorAll('.track-stop').forEach(el => {
                 const c = parseInt(el.dataset.col, 10);
-                addTooltipEvents(el, () => `<strong>Track Stop ${c + 1}</strong>Stops clips on track ${c + 1}. In Note/User modes with USE_STOP_ROW=True, joins the grid as a 6th row.`);
+                addTooltipEvents(el, () => {
+                    const def = matrixModeDefinitions[currentMatrixMode];
+                    return def && def.stopTip ? def.stopTip(c) : '';
+                });
             });
 
-            // Scene Launch column (5 cells).
+            // Scene Launch column (5 cells). Plan 04 — matrix-mode aware.
             document.querySelectorAll('.scene-launch').forEach(el => {
                 const r = parseInt(el.dataset.row, 10);
-                addTooltipEvents(el, () => `<strong>Scene Launch ${r + 1}</strong>Launches scene ${r + 1}. In Step Sequencer mode, repurposed for velocity / loop length controls.`);
+                addTooltipEvents(el, () => {
+                    const def = matrixModeDefinitions[currentMatrixMode];
+                    return def && def.sceneTip ? def.sceneTip(r) : '';
+                });
             });
 
             // Channel sliders (8) + master volume — non-interactive per D-07.
@@ -703,11 +764,18 @@
                 }
             });
 
-            // Master-Select — I-03 fix. Source:
+            // Master-Select — I-03 fix. Plan 04 wires StepSequencer follow
+            // override. Source:
             // StepSequencerComponent.py:489-498 wired in APC_64_40_9.py:190.
             const masterSelect = document.getElementById('master-select');
             if (masterSelect) {
-                addTooltipEvents(masterSelect, () => `<strong>Master Select</strong>Selects the master track. In StepSequencer mode, becomes the Follow toggle (sequencer view follows the playing clip). Source: StepSequencerComponent.py:489-498 wired in APC_64_40_9.py:190.`);
+                addTooltipEvents(masterSelect, () => {
+                    const def = matrixModeDefinitions[currentMatrixMode];
+                    if (def && def.followOverride) {
+                        return def.followOverride.tip();
+                    }
+                    return `<strong>Master Select</strong>Selects the master track. In StepSequencer mode, becomes the Follow toggle (sequencer view follows the playing clip). Source: StepSequencerComponent.py:489-498 wired in APC_64_40_9.py:190.`;
+                });
             }
 
             // Crossfader.
@@ -857,6 +925,392 @@
             }
         }
 
+        // ────────────────────────────────────────────────────────────────
+        // Plan 04 — Matrix mode wiring (D-04a, D-05, D-06a, D-08a).
+        //
+        // matrixMapsLiterals: Note/User Mode constants extracted at write-time
+        // from Matrix_Maps.py per D-05 ("do not hard-code an out-of-sync
+        // copy"). Each key is the mode number (1-6) — values mirror
+        // PATTERN_N / CHANNEL_N / NOTEMAP_N / USE_STOP_ROW_N / IS_NOTE_MODE_N.
+        //
+        // matrixModeDefinitions: per-mode repaint info + tooltip getters,
+        // 9 keys total: ClipLaunch, SessionOverview, NoteMode1-6, StepSequencer.
+        //
+        // setMatrixMode(modeId): repaints the grid + Track Stop + Scene Launch
+        // + Solo/Mute/Arm rows + Master Select button on every click.
+        //
+        // Wiring citations (verified against APC_64_40_9.py:180-200 at
+        // write-time):
+        //   • Line 190: set_follow_button(master_select_button)
+        //   • Line 191: set_velocity_buttons(tuple(arm_buttons))
+        //   • Line 193: set_lane_mute_buttons(tuple(self._scene_launch_buttons))
+        //   • Line 194: set_loop_start_buttons(tuple(mute_buttons))
+        //   • Line 195: set_loop_length_buttons(tuple(solo_buttons))
+        // ────────────────────────────────────────────────────────────────
+
+        // Matrix_Maps.py LED color codes (line 37):
+        //   0=off, 1=green, 2=green blink, 3=red, 4=red blink,
+        //   5=yellow, 6=yellow blink, 7-127=green
+        const LED_COLOR_MAP = {
+            0: { name: 'off',          css: '#1e293b' },
+            1: { name: 'green',        css: '#10b981' },
+            2: { name: 'green blink',  css: '#10b981' },
+            3: { name: 'red',          css: '#ef4444' },
+            4: { name: 'red blink',    css: '#ef4444' },
+            5: { name: 'yellow',       css: '#f59e0b' },
+            6: { name: 'yellow blink', css: '#f59e0b' },
+        };
+        function colorCodeToCss(code) {
+            if (code in LED_COLOR_MAP) return LED_COLOR_MAP[code].css;
+            if (code >= 7 && code <= 127) return LED_COLOR_MAP[1].css;
+            return LED_COLOR_MAP[0].css;
+        }
+        function colorCodeToName(code) {
+            if (code in LED_COLOR_MAP) return LED_COLOR_MAP[code].name;
+            if (code >= 7 && code <= 127) return 'green';
+            return 'unknown';
+        }
+        function midiNoteName(n) {
+            const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const oct = Math.floor(n / 12) - 2;  // MIDI: C-2 = 0
+            return `${names[n % 12]}${oct}`;
+        }
+
+        // Note/User Mode literals — extracted from Matrix_Maps.py at
+        // write-time (D-05). PATTERN_N is 6 rows × 8 columns; row index
+        // 5 is the Track Stop row.
+        const matrixMapsLiterals = {
+            1: {
+                USE_STOP_ROW: true,
+                IS_NOTE_MODE: true,
+                CHANNEL: 9,
+                PATTERN: [
+                    [3, 3, 3, 3, 5, 5, 5, 5],
+                    [3, 3, 3, 3, 5, 5, 5, 5],
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 3, 3, 3, 3],
+                    [1, 1, 1, 1, 3, 3, 3, 3],
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                ],
+                NOTEMAP: [
+                    [56, 57, 58, 59, 80, 81, 82, 83],
+                    [52, 53, 54, 55, 76, 77, 78, 79],
+                    [48, 49, 50, 51, 72, 73, 74, 75],
+                    [44, 45, 46, 47, 68, 69, 70, 71],
+                    [40, 41, 42, 43, 64, 65, 66, 67],
+                    [36, 37, 38, 39, 60, 61, 62, 63],
+                ],
+            },
+            2: {
+                USE_STOP_ROW: true,
+                IS_NOTE_MODE: true,
+                CHANNEL: 10,
+                PATTERN: [
+                    [5, 5, 5, 5, 5, 5, 5, 5],
+                    [1, 1, 1, 1, 5, 5, 5, 5],
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                    [3, 3, 3, 3, 3, 3, 3, 3],
+                    [1, 1, 1, 1, 3, 3, 3, 3],
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                ],
+                NOTEMAP: [
+                    [76, 77, 78, 79, 80, 81, 82, 83],
+                    [68, 69, 70, 71, 72, 73, 74, 75],
+                    [60, 61, 62, 63, 64, 65, 66, 67],
+                    [52, 53, 54, 55, 56, 57, 58, 59],
+                    [44, 45, 46, 47, 48, 49, 50, 51],
+                    [36, 37, 38, 39, 40, 41, 42, 43],
+                ],
+            },
+            3: {
+                USE_STOP_ROW: true,
+                IS_NOTE_MODE: true,
+                CHANNEL: 11,
+                PATTERN: [
+                    [5, 5, 0, 5, 0, 5, 0, 5],
+                    [0, 1, 0, 1, 5, 0, 5, 0],
+                    [1, 0, 1, 0, 1, 1, 0, 1],
+                    [3, 3, 0, 3, 0, 3, 0, 3],
+                    [0, 1, 0, 1, 3, 0, 3, 0],
+                    [1, 0, 1, 0, 1, 1, 0, 1],
+                ],
+                NOTEMAP: [
+                    [76, 77, 78, 79, 80, 81, 82, 83],
+                    [68, 69, 70, 71, 72, 73, 74, 75],
+                    [60, 61, 62, 63, 64, 65, 66, 67],
+                    [52, 53, 54, 55, 56, 57, 58, 59],
+                    [44, 45, 46, 47, 48, 49, 50, 51],
+                    [36, 37, 38, 39, 40, 41, 42, 43],
+                ],
+            },
+            4: {
+                USE_STOP_ROW: false,
+                IS_NOTE_MODE: true,
+                CHANNEL: 12,
+                PATTERN: [
+                    [5, 1, 5, 1, 3, 1, 3, 1],
+                    [1, 5, 1, 5, 1, 3, 1, 3],
+                    [5, 1, 5, 1, 3, 1, 3, 1],
+                    [1, 5, 1, 5, 1, 3, 1, 3],
+                    [5, 1, 5, 1, 3, 1, 3, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                ],
+                NOTEMAP: [
+                    [56, 57, 58, 59, 80, 81, 82, 83],
+                    [52, 53, 54, 55, 76, 77, 78, 79],
+                    [48, 49, 50, 51, 72, 73, 74, 75],
+                    [44, 45, 46, 47, 68, 69, 70, 71],
+                    [40, 41, 42, 43, 64, 65, 66, 67],
+                    [36, 37, 38, 39, 60, 61, 62, 63],
+                ],
+            },
+            5: {
+                USE_STOP_ROW: true,
+                IS_NOTE_MODE: true,
+                CHANNEL: 13,
+                PATTERN: [
+                    [1, 5, 3, 1, 5, 3, 1, 5],
+                    [1, 5, 3, 1, 5, 3, 1, 5],
+                    [1, 5, 3, 1, 5, 3, 1, 5],
+                    [1, 5, 3, 1, 5, 3, 1, 5],
+                    [1, 5, 3, 1, 5, 3, 1, 5],
+                    [1, 1, 1, 1, 1, 1, 1, 5],
+                ],
+                NOTEMAP: [
+                    [41, 47, 53, 59, 65, 71, 77, 83],
+                    [40, 46, 52, 58, 64, 70, 76, 82],
+                    [39, 45, 51, 57, 63, 69, 75, 81],
+                    [38, 44, 50, 56, 62, 68, 74, 80],
+                    [37, 43, 49, 55, 61, 67, 73, 79],
+                    [36, 42, 48, 54, 60, 66, 72, 78],
+                ],
+            },
+            6: {
+                USE_STOP_ROW: true,
+                IS_NOTE_MODE: false,
+                CHANNEL: 14,
+                PATTERN: [
+                    [3, 3, 3, 3, 3, 3, 3, 3],
+                    [5, 5, 5, 5, 5, 5, 5, 5],
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                    [3, 3, 3, 3, 3, 3, 3, 3],
+                    [5, 5, 5, 5, 5, 5, 5, 5],
+                    [1, 1, 1, 1, 1, 1, 1, 1],
+                ],
+                NOTEMAP: [
+                    [56, 57, 58, 59, 80, 81, 82, 83],
+                    [52, 53, 54, 55, 76, 77, 78, 79],
+                    [48, 49, 50, 51, 72, 73, 74, 75],
+                    [44, 45, 46, 47, 68, 69, 70, 71],
+                    [40, 41, 42, 43, 64, 65, 66, 67],
+                    [36, 37, 38, 39, 60, 61, 62, 63],
+                ],
+            },
+        };
+
+        // Helper: build a Note Mode definition from matrixMapsLiterals.
+        // Function declaration so it hoists above matrixModeDefinitions.
+        function makeNoteModeDef(n) {
+            const m = matrixMapsLiterals[n];
+            const stopRowColors = m.PATTERN[5] || [0, 0, 0, 0, 0, 0, 0, 0];
+            const stopRowNotes  = m.NOTEMAP[5] || [0, 0, 0, 0, 0, 0, 0, 0];
+            return {
+                desc: `Note Mode ${n}${m.IS_NOTE_MODE ? ' — sends MIDI notes' : ' — User mode (does not send MIDI)'} on channel ${m.CHANNEL + 1} (CHANNEL_${n}=${m.CHANNEL}). USE_STOP_ROW_${n}=${m.USE_STOP_ROW}.`,
+                gridColor: (r, c) => colorCodeToCss(m.PATTERN[r][c]),
+                gridLabel: (r, c) => midiNoteName(m.NOTEMAP[r][c]),
+                gridTip: (r, c) => {
+                    const note = m.NOTEMAP[r][c];
+                    const colorCode = m.PATTERN[r][c];
+                    return `<strong>Note Mode ${n} — Pad (Row ${r + 1}, Col ${c + 1})</strong>${m.IS_NOTE_MODE ? `Sends MIDI note ${note} (${midiNoteName(note)}) on channel ${m.CHANNEL + 1} (CHANNEL_${n}=${m.CHANNEL}).` : `User Mode — does not send MIDI.`} LED color: ${colorCodeToName(colorCode)} (PATTERN_${n} cell value = ${colorCode}).<div class="related"><em>Customizing this mode:</em> open <code>Matrix_Maps.py</code> in any text editor and edit <code>PATTERN_${n}</code> / <code>CHANNEL_${n}</code> / <code>NOTEMAP_${n}</code>. <a href="#matrix-maps-format">See the Matrix_Maps.py format reference below.</a></div>`;
+                },
+                stopColor: () => m.USE_STOP_ROW ? colorCodeToCss(stopRowColors[0]) : '#475569',
+                stopLabel: (c) => m.USE_STOP_ROW ? midiNoteName(stopRowNotes[c]) : '–',
+                stopTip: (c) => m.USE_STOP_ROW
+                    ? `<strong>Track Stop ${c + 1} — joins Note Mode ${n} grid (USE_STOP_ROW_${n} = True)</strong>${m.IS_NOTE_MODE ? `Sends MIDI note ${stopRowNotes[c]} (${midiNoteName(stopRowNotes[c])}) on channel ${m.CHANNEL + 1}.` : `User Mode — does not send MIDI.`} The bottom row joins the grid as a 6th row.<div class="related"><em>Source:</em> MatrixModesComponent.py:176–207 (_set_note_mode applies USE_STOP_ROW_${n}).</div>`
+                    : `<strong>Track Stop ${c + 1} (Note Mode ${n})</strong>Inactive in this mode (USE_STOP_ROW_${n} = False). Track Stop reverts to its native clip-stop function.`,
+                sceneColor: () => '#475569',
+                sceneLabel: (r) => `–`,
+                sceneTip: (r) => `<strong>Scene Launch (Note Mode ${n})</strong>Inactive in Note/User modes.`,
+            };
+        }
+
+        const matrixModeDefinitions = {
+            'ClipLaunch': {
+                desc: 'Default — 5×8 clip launch grid. Each pad fires the clip in that slot. Track Stop row stops clips per track. Scene Launch column fires scenes.',
+                gridColor: (r, c) => '#2563eb',
+                gridLabel: (r, c) => `T${c + 1}<br>S${r + 1}`,
+                gridTip: (r, c) => `<strong>Clip slot — Track ${c + 1}, Scene ${r + 1}</strong>Hardware press launches the clip in this slot. Empty slots trigger record-to-clip when the track is armed.<div class="related"><em>Source:</em> MatrixModesComponent.py:114–172 (mode 0 — ClipLaunch).</div>`,
+                stopColor: () => '#94a3b8',
+                stopLabel: (c) => `Stop<br>${c + 1}`,
+                stopTip: (c) => `<strong>Track Stop ${c + 1}</strong>Stops clips on track ${c + 1}.`,
+                sceneColor: () => '#10b981',
+                sceneLabel: (r) => `Scene<br>${r + 1}`,
+                sceneTip: (r) => `<strong>Scene Launch ${r + 1}</strong>Launches scene ${r + 1} (fires the row of clips).`,
+            },
+            'SessionOverview': {
+                desc: 'Zoom-out view. Each grid cell represents an 8×5 block of clips. Click to jump to that clip page.',
+                gridColor: (r, c) => '#475569',
+                gridLabel: (r, c) => `Bank<br>${r * 8 + c + 1}`,
+                gridTip: (r, c) => `<strong>Session bank — block ${r * 8 + c + 1}</strong>Each cell represents an 8×5 block of clips. Selecting a cell scrolls the session view to that block.<div class="related"><em>Source:</em> MatrixModesComponent.py:114–172 (mode 1 — SessionOverview) — depends on _session_zoom._is_zoomed_out.</div>`,
+                stopColor: () => '#475569',
+                stopLabel: (c) => `–`,
+                stopTip: (c) => `<strong>Track Stop (Session Overview)</strong>Inactive in this mode.`,
+                sceneColor: () => '#475569',
+                sceneLabel: (r) => `–`,
+                sceneTip: (r) => `<strong>Scene Launch (Session Overview)</strong>Inactive in this mode.`,
+            },
+            'NoteMode1': makeNoteModeDef(1),
+            'NoteMode2': makeNoteModeDef(2),
+            'NoteMode3': makeNoteModeDef(3),
+            'NoteMode4': makeNoteModeDef(4),
+            'NoteMode5': makeNoteModeDef(5),
+            'NoteMode6': makeNoteModeDef(6),
+            'StepSequencer': {
+                desc: '64-step sequencer overlay engaged via Shift+Master button (toggles _step_sequencer_active in ShiftableSelectorComponent.py:137–173). Repaints the grid for steps, Track Stop for bank pages, Scene Launch for lane mute, Solo row for loop start, Mute row for loop length, the arm-button row for velocity, and the Master Select button for follow.',
+                gridColor: (r, c) => (r + c) % 2 === 0 ? '#0ea5e9' : '#1e293b',
+                gridLabel: (r, c) => `Step<br>${r * 8 + c + 1}`,
+                gridTip: (r, c) => `<strong>Step ${r * 8 + c + 1}</strong>Hardware press toggles this step on/off in the current bank page (8 pages × 8 steps = 64 steps total).<div class="related"><em>Source:</em> StepSequencerComponent.py:38–84 (init state) + APC_64_40_9.py:186 (sequencer instantiation).</div>`,
+                stopColor: () => '#a855f7',
+                stopLabel: (c) => `Page<br>${c + 1}`,
+                stopTip: (c) => `<strong>Bank Page ${c + 1}</strong>Selects which 8-step bank the grid is showing. 8 pages × 8 steps = 64 steps total.<div class="related"><em>Source:</em> StepSequencerComponent.py:387–412 (set_bank_buttons), wired to track-select buttons in APC_64_40_9.py:187.</div>`,
+                sceneColor: () => '#06b6d4',
+                sceneLabel: (r) => `Lane<br>Mute ${r + 1}`,
+                sceneTip: (r) => `<strong>Lane Mute ${r + 1}</strong>Mutes lane ${r + 1}. Hold Shift to repurpose as quantization (q_step, 5 levels).<div class="related"><em>Source:</em> StepSequencerComponent.py:549–571 (set_lane_mute_buttons + q_step), wired to scene-launch buttons in APC_64_40_9.py:193.</div>`,
+                // soloOverride.tip cites APC_64_40_9.py:194 — the line where set_loop_start_buttons receives mute_buttons.
+                // The .solo-pad row in the HTML shows "Loop Start" because the StepSequencer hardware wiring is what
+                // the tooltip text describes, not the HTML class name.
+                soloOverride: {
+                    color: '#22c55e',
+                    label: (c) => `LStart<br>${c + 1}`,
+                    tip: (c) => `<strong>Loop Start ${c + 1}</strong>Sets the start step of the playback loop.<div class="related"><em>Source:</em> StepSequencerComponent.py:490–520, wired to mute-buttons in APC_64_40_9.py:194.</div>`,
+                },
+                // muteOverride.tip cites APC_64_40_9.py:195 — the line where set_loop_length_buttons receives solo_buttons.
+                // I-01 fix: the citation is :195, not :193 (line 193 wires lane_mute, not loop_length).
+                muteOverride: {
+                    color: '#eab308',
+                    label: (c) => `LLen<br>${c + 1}`,
+                    tip: (c) => `<strong>Loop Length ${c + 1}</strong>Sets the length of the playback loop in steps.<div class="related"><em>Source:</em> StepSequencerComponent.py:523–547, wired to solo-buttons in APC_64_40_9.py:195.</div>`,
+                },
+                // I-03 fix: explicit overrides for the velocity row (.arm-pad) and the follow button (#master-select).
+                // DOC-09 explicitly requires both to be documented with engagement instructions.
+                armOverride: {
+                    color: '#84cc16',
+                    label: (c) => `Vel<br>${c + 1}`,
+                    tip: (c) => `<strong>Velocity ${c + 1}</strong>Velocity selector — pad ${c + 1} sets sequencer velocity to a discrete level (5 levels distributed across the row). Hold to set the level for new step entries.<div class="related"><em>Source:</em> StepSequencerComponent.py:461-487, wired to arm-buttons in APC_64_40_9.py:191.</div>`,
+                },
+                followOverride: {
+                    color: '#f97316',
+                    label: () => `Follow`,
+                    tip: () => `<strong>Follow toggle</strong>When ON, the sequencer view follows the playing clip's current step automatically. When OFF, the view stays locked to the selected bank page. Toggle by tapping the Master Select button.<div class="related"><em>Source:</em> StepSequencerComponent.py:489-498, wired to master-select-button in APC_64_40_9.py:190.</div>`,
+                },
+                velocityHint: 'Velocity buttons (5 levels) are wired to the arm-button row by APC_64_40_9.py:191 (set_velocity_buttons ← arm_buttons). Plan 02 renders the arm row as `.arm-pad` cells; the StepSequencer mode repaint (armOverride) re-tooltips them.',
+            },
+        };
+
+        function setMatrixMode(modeId) {
+            const def = matrixModeDefinitions[modeId];
+            if (!def) return;
+            currentMatrixMode = modeId;
+
+            // Repaint mode-strip button highlight.
+            document.querySelectorAll('.matrix-mode-btn').forEach(btn => {
+                if (btn.dataset.mode === modeId) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Repaint clip grid (5×8 = 40 pads).
+            document.querySelectorAll('.grid-pad').forEach(cell => {
+                const r = parseInt(cell.dataset.row, 10);
+                const c = parseInt(cell.dataset.col, 10);
+                cell.style.backgroundColor = def.gridColor(r, c);
+                cell.innerHTML = def.gridLabel(r, c);
+            });
+
+            // Repaint Track Stop row (8 cells).
+            document.querySelectorAll('.track-stop').forEach(cell => {
+                const c = parseInt(cell.dataset.col, 10);
+                cell.style.backgroundColor = def.stopColor(c);
+                cell.innerHTML = def.stopLabel(c);
+            });
+
+            // Repaint Scene Launch column (5 cells).
+            document.querySelectorAll('.scene-launch').forEach(cell => {
+                const r = parseInt(cell.dataset.row, 10);
+                cell.style.backgroundColor = def.sceneColor(r);
+                cell.innerHTML = def.sceneLabel(r);
+            });
+
+            // Step Sequencer overrides Solo + Mute rows.
+            if (def.soloOverride) {
+                document.querySelectorAll('.solo-pad').forEach(cell => {
+                    const c = parseInt(cell.dataset.col, 10);
+                    cell.style.backgroundColor = def.soloOverride.color;
+                    cell.innerHTML = def.soloOverride.label(c);
+                });
+            } else {
+                // Restore default Solo row painting (Plan 02 colors).
+                document.querySelectorAll('.solo-pad').forEach(cell => {
+                    const c = parseInt(cell.dataset.col, 10);
+                    cell.style.backgroundColor = '#06b6d4';
+                    cell.innerHTML = `Solo<br>${c + 1}`;
+                });
+            }
+            if (def.muteOverride) {
+                document.querySelectorAll('.mute-pad').forEach(cell => {
+                    const c = parseInt(cell.dataset.col, 10);
+                    cell.style.backgroundColor = def.muteOverride.color;
+                    cell.innerHTML = def.muteOverride.label(c);
+                });
+            } else {
+                document.querySelectorAll('.mute-pad').forEach(cell => {
+                    const c = parseInt(cell.dataset.col, 10);
+                    cell.style.backgroundColor = '#f59e0b';
+                    cell.innerHTML = `Mute<br>${c + 1}`;
+                });
+            }
+
+            // I-03 fix: arm-button row (velocity in StepSequencer mode,
+            // otherwise the default Plan-02 unmapped tooltip surface).
+            if (def.armOverride) {
+                document.querySelectorAll('.arm-pad').forEach(cell => {
+                    const c = parseInt(cell.dataset.col, 10);
+                    cell.style.backgroundColor = def.armOverride.color;
+                    cell.innerHTML = def.armOverride.label(c);
+                });
+            } else {
+                // Restore default arm-pad rendering (Plan 02 dimmed unmapped state).
+                document.querySelectorAll('.arm-pad').forEach(cell => {
+                    const c = parseInt(cell.dataset.col, 10);
+                    cell.style.backgroundColor = '';  // restore CSS default from .arm-pad rule
+                    cell.innerHTML = `Arm<br>${c + 1}`;
+                });
+            }
+
+            // I-03 fix: master-select button (follow toggle in StepSequencer
+            // mode, otherwise default).
+            const masterSelect = document.getElementById('master-select');
+            if (masterSelect) {
+                if (def.followOverride) {
+                    masterSelect.style.backgroundColor = def.followOverride.color;
+                    masterSelect.innerHTML = def.followOverride.label();
+                } else {
+                    masterSelect.style.backgroundColor = '';  // restore CSS default
+                    masterSelect.innerHTML = 'Master<br>Sel';
+                }
+            }
+
+            // Update legend description. Preserve the Encoder Mode line
+            // from setEncoderMode and append/replace the Matrix Mode line.
+            const legend = document.getElementById('legend-desc');
+            if (legend) {
+                const existing = legend.innerHTML.split('<br><strong>Matrix Mode:</strong>')[0];
+                legend.innerHTML = `${existing}<br><strong>Matrix Mode:</strong> ${modeId} — ${def.desc}`;
+            }
+        }
+
         // Defensive removal of the Plan-01 placeholder pad (the HTML
         // element was already deleted in this plan, but if a future
         // editor reintroduces it the runtime will still clean it up).
@@ -891,6 +1345,28 @@
             });
 
             setEncoderMode('Pan');  // initial paint per D-04b (default)
+
+            // Plan 04 — wire matrix-mode strip click handlers + tooltips +
+            // initial paint. Per D-04b, ClipLaunch is the rest state default.
+            document.querySelectorAll('.matrix-mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => setMatrixMode(btn.dataset.mode));
+            });
+
+            document.querySelectorAll('.matrix-mode-btn').forEach(btn => {
+                addTooltipEvents(btn, () => {
+                    const def = matrixModeDefinitions[btn.dataset.mode];
+                    if (!def) return '';
+                    let extra = '';
+                    if (btn.dataset.mode.startsWith('NoteMode')) {
+                        extra = `<div class="related"><em>Customizing this mode:</em> open <code>Matrix_Maps.py</code>. <a href="#matrix-maps-format">See the format reference below.</a></div>`;
+                    } else if (btn.dataset.mode === 'StepSequencer') {
+                        extra = `<div class="related"><em>Engagement:</em> Shift + Master button (ShiftableSelectorComponent.py:137–173 toggles _step_sequencer_active). The matrix-mode strip lists this as the 9th entry to show what the grid does when the toggle is on.</div>`;
+                    }
+                    return `<strong>${btn.dataset.mode} — Matrix Mode</strong>${def.desc}${extra}`;
+                });
+            });
+
+            setMatrixMode('ClipLaunch');  // initial paint per D-04b (default)
         });
     </script>
 
