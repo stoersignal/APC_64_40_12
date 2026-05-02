@@ -47,7 +47,7 @@ Plans:
 - [x] 06-04-PLAN.md — Matrix mode strip: setMatrixMode() + matrixModeDefinitions for ClipLaunch/SessionOverview/NoteMode1-6/StepSequencer + Matrix_Maps.py format reference section (DOC-02, DOC-09, DOC-10) — touches docs/manual.html
 
 **Wave 5** *(blocked on Wave 4)*
-- [ ] 06-05-PLAN.md — Modifier overlays: toggleModifierOverlay() for ShiftHeld + SaveMode + Solo/Mute toggle/momentary tooltips + Tap/Nudge/Shift transport tooltips (DOC-02, DOC-03, DOC-05, DOC-06, DOC-07) — touches docs/manual.html
+- [x] 06-05-PLAN.md — Modifier overlays: toggleModifierOverlay() for ShiftHeld + SaveMode + Solo/Mute toggle/momentary tooltips + Tap/Nudge/Shift transport tooltips (DOC-02, DOC-03, DOC-05, DOC-06, DOC-07) — touches docs/manual.html
 
 **Cross-cutting constraints** *(must_haves.truths shared by 2+ plans):*
 - Terminology gate (D-09 / D-10): every plan that produces user-facing prose enforces `grep -ci 'snapshot' = 0` and requires `'variation'` to appear — applies to all 8 plans
