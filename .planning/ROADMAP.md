@@ -32,7 +32,7 @@
 Plans:
 
 **Wave 1** *(foundation — must complete before any other wave)*
-- [ ] 06-01-PLAN.md — HTML skeleton + APC40-renamed CSS palette + tooltip JS + three empty mode-strip stubs (DOC-02 foundation)
+- [x] 06-01-PLAN.md — HTML skeleton + APC40-renamed CSS palette + tooltip JS + three empty mode-strip stubs (DOC-02 foundation)
 
 **Wave 2** *(blocked on Wave 1 — three parallel plans on disjoint files)*
 - [ ] 06-02-PLAN.md — APC40 hardware layout via buildLayout(): clip grid, Track Stop, Solo/Mute, Arm row + master-select, Scene Launch, encoders, sliders, transport, mode-strip stub buttons (DOC-02, DOC-03, DOC-04, DOC-07, DOC-08, DOC-09, DOC-10) — touches docs/manual.html

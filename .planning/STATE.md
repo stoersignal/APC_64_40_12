@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Documentation
-status: ready-to-execute
-stopped_at: Phase 6 planned — 8 plans in 5 waves, ready for /gsd-execute-phase 6
-last_updated: "2026-05-02T08:45:00.000Z"
-last_activity: 2026-05-02
+status: executing
+stopped_at: Phase 6 planning complete — 8 PLAN.md files in .planning/phases/06-create-user-manual/, ROADMAP.md annotated with wave dependencies, all 10 DOC-NN requirements + 18 D-NN decisions covered (or correctly OOS)
+last_updated: "2026-05-02T06:55:46.855Z"
+last_activity: 2026-05-02 -- Phase 6 execution started
 progress:
   total_phases: 1
   completed_phases: 0
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-02)
 
 **Core value:** Users can install, configure, and operate every shipped controller feature without reading source code.
-**Current focus:** Phase 6 — Create user manual
+**Current focus:** Phase 6 — create-user-manual
 
 ## Current Position
 
 Milestone: v1.2 Documentation — **ready to execute** (planned 2026-05-02)
-Phase: 6 (Create user manual)
-Plan: 8 plans in 5 waves — verified by gsd-plan-checker (iteration 2/3 passed all gates)
-Status: Planning complete; ready for `/gsd-execute-phase 6`
-Last activity: 2026-05-02 — Phase 6 planned via /gsd-plan-phase (PATTERNS + 8 PLAN.md files committed; 1 BLOCKER + 5 WARNINGS resolved in revision iteration 1)
+Phase: 6 (create-user-manual) — EXECUTING
+Plan: 1 of 8
+Status: Executing Phase 6
+Last activity: 2026-05-02 -- Phase 6 execution started
 
 Progress: [░░░░░░░░░░] 0% of v1.2
 
