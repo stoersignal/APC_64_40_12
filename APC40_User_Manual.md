@@ -35,9 +35,10 @@ The encoders on the right side of the APC40 (Track Control and Device Control) c
   * **Top row** (encoders 1 / 2 / 3 / 4): **Drive** / **Env Attack** / **Env Release** / **LFO Rate**.
   * **Bottom row** (encoders 5 / 6 / 7 / 8): **Frequency** / **Resonance** / **Env Amount** / **LFO Amount**.
   * **Pan button** → **Filter Slope** cycle (12 → 24 → 48 dB/oct).
-  * **Send A button** → **LFO On/Off** toggle.
-  * **Send B button** → **Filter Type** cycle (LP → HP → BP → Notch → Morph).
-  * **Send C button** → **Side Chain** (Sidechain Mix) on/off toggle.
+  * **Send A button** → **Sidechain On/Off** toggle (`S/C On`).
+  * **Send B button** → **Filter Type** cycle (LP → HP → BP → Notch → Morph → Vowel → DJ).
+  * **Send C button** → **Soft Clip On/Off** toggle (drive saturation).
+  * **Filter-type-aware encoders 5 / 6** (Frequency / Resonance row): when the **Vowel** filter type is active, encoder 5 drives `Pitch` and encoder 6 drives `Formant`. When **DJ** is active, encoder 5 drives `Control`. Other filter types use `Frequency` / `Resonance`. The swap re-evaluates instantly when the user changes the Filter Type from Live's UI (filter-type listener wired on `Filter Type`).
   * Bank-button LEDs light when their underlying parameter is non-zero.
   * Tracks without an Auto Filter device leave all encoders / buttons released and LEDs off (same fail-quiet behavior as EQ Smart Control on tracks without an EQ device).
   * On first activation the script logs the detected Auto Filter's parameter names to Live's `Log.txt` (lines starting `[AutoFilter]`) so the parameter-name mapping can be verified.

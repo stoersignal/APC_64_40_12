@@ -35,32 +35,41 @@ from _Framework.MixerComponent import MixerComponent
 from _Generic.Devices import *
 
 
-# Parameter-name guesses — verified via Log.txt dump on first activation.
+# Parameter names — verified via the Log.txt dump on first activation
+# (now removed). Live 11+ AutoFilter2 uses no-period 'Env Attack' /
+# 'Env Release' / 'Env Amount' and exposes 'S/C On' / 'Soft Clip On' as
+# the natural performance toggles (there is no 'LFO On' param).
 AUTOFILTER_PARAMS = {
-    # Encoders (top row → bottom row)
+    # Static encoders (don't change with filter type)
     'Drive':       'Drive',
-    'EnvAttack':   'Env. Attack',
-    'EnvRelease':  'Env. Release',
+    'EnvAttack':   'Env Attack',
+    'EnvRelease':  'Env Release',
     'LFORate':     'LFO Rate',
-    'Frequency':   'Frequency',
-    'Resonance':   'Resonance',
-    'EnvAmount':   'Env. Amount',
+    'EnvAmount':   'Env Amount',
     'LFOAmount':   'LFO Amount',
+    # Filter-type-dependent encoders (resolved at setup-time):
+    'Frequency':   'Frequency',   # default
+    'Resonance':   'Resonance',   # default
+    'Pitch':       'Pitch',       # Vowel filter
+    'Formant':     'Formant',     # Vowel filter
+    'Control':     'Control',     # DJ filter
     # Buttons
     'Slope':       'Filter Slope',
-    'LFOOn':       'LFO On',
     'FilterType':  'Filter Type',
-    'SidechainOn': 'Sidechain Mix',  # falls back gracefully when absent
+    'SidechainOn': 'S/C On',       # toggle (the LFO has no on/off; sidechain does)
+    'SoftClipOn':  'Soft Clip On', # toggle
 }
 
 # Encoder index → AUTOFILTER_PARAMS key. Order: top row 0..3, bottom row 4..7.
+# Encoders 4 and 5 are placeholders here — the actual freq/resonance binding
+# is decided per filter type by _resolve_freq_reso_params (Vowel → Pitch /
+# Formant; DJ → Control / —; else → Frequency / Resonance).
 ENCODER_MAP = (
     (0, 'Drive'),
     (1, 'EnvAttack'),
     (2, 'EnvRelease'),
     (3, 'LFORate'),
-    (4, 'Frequency'),
-    (5, 'Resonance'),
+    # 4, 5 wired by _bind_freq_reso_encoders
     (6, 'EnvAmount'),
     (7, 'LFOAmount'),
 )
@@ -68,10 +77,20 @@ ENCODER_MAP = (
 # Button index → (AUTOFILTER_PARAMS key, mode 'cycle' | 'toggle')
 BUTTON_MAP = (
     (0, 'Slope', 'cycle'),
-    (1, 'LFOOn', 'toggle'),
+    (1, 'SidechainOn', 'toggle'),
     (2, 'FilterType', 'cycle'),
-    (3, 'SidechainOn', 'toggle'),
+    (3, 'SoftClipOn', 'toggle'),
 )
+
+# Filter-type label → (freq-encoder-param-key, reso-encoder-param-key).
+# Lookup is by the label string from the parameter's value_items, so it works
+# regardless of which integer index Live assigns to each filter type in a
+# given build. None means "leave the encoder unbound for this filter type"
+# (no equivalent control on the device).
+FILTER_TYPE_PARAM_OVERRIDES = {
+    'Vowel': ('Pitch',   'Formant'),
+    'DJ':    ('Control', None),
+}
 
 
 class EncoderAutoFilterComponent(ControlSurfaceComponent):
@@ -93,8 +112,8 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         self._button_bindings = []
         # Per-parameter LED feedback listeners. Each entry: (parameter, callback).
         self._led_listeners = []
-        # One-shot Log.txt dump of param names on first AutoFilter detection.
-        self._autofilter_logged = False
+        # Filter-type listener so encoders 4/5 swap when user picks Vowel / DJ.
+        self._filter_type_listener_param = None
 
     def disconnect(self):
         self._teardown_bindings()
@@ -166,19 +185,7 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         if device is None:
             return  # no AutoFilter on this track — fail quiet, all controls dark
 
-        # One-shot Log.txt dump for parameter-name verification (mirrors the
-        # ChannelEq / FilterEQ3 / Eq8 pattern; a few missed names are caught
-        # in one UAT round instead of multiple).
-        if not self._autofilter_logged:
-            self._autofilter_logged = True
-            try:
-                self._parent.log_message('[AutoFilter] params on detected device:')
-                for p in device.parameters:
-                    self._parent.log_message('[AutoFilter]   ' + repr(p.name))
-            except Exception as e:
-                self._parent.log_message('[AutoFilter] params introspection failed: ' + str(e))
-
-        # Bind 8 encoders.
+        # Bind static encoders (0/1/2/3/6/7).
         for idx, key in ENCODER_MAP:
             try:
                 self._param_controls[idx].release_parameter()
@@ -190,6 +197,10 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
                     self._param_controls[idx].connect_to(param)
                 except Exception:
                     pass
+
+        # Filter-type-dependent encoders 4 and 5 (Frequency/Resonance ↔ Pitch/Formant ↔ Control).
+        self._bind_freq_reso_encoders(device)
+        self._attach_filter_type_listener(device)
 
         # Bind 4 bank buttons (cycle / toggle handlers + LED listeners).
         for btn_idx, key, kind in BUTTON_MAP:
@@ -250,6 +261,75 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
             except Exception:
                 pass
         self._led_listeners = []
+        # Filter-type listener.
+        self._detach_filter_type_listener()
+
+    # --- Filter-type-dependent freq/reso binding ------------------------
+
+    def _resolve_freq_reso_params(self, device):
+        """ Return (freq_param, reso_param) based on the current Filter Type label.
+        Vowel → (Pitch, Formant); DJ → (Control, None); otherwise → (Frequency, Resonance). """
+        ft_param = get_parameter_by_name(device, AUTOFILTER_PARAMS['FilterType'])
+        label = None
+        if ft_param is not None:
+            try:
+                value = int(round(float(ft_param.value)))
+                items = list(getattr(ft_param, 'value_items', []))
+                if 0 <= value < len(items):
+                    label = str(items[value]).strip()
+            except Exception:
+                label = None
+        override = FILTER_TYPE_PARAM_OVERRIDES.get(label) if label else None
+        if override is None:
+            freq_key, reso_key = 'Frequency', 'Resonance'
+        else:
+            freq_key, reso_key = override
+        freq_param = get_parameter_by_name(device, AUTOFILTER_PARAMS[freq_key]) if freq_key else None
+        reso_param = get_parameter_by_name(device, AUTOFILTER_PARAMS[reso_key]) if reso_key else None
+        return freq_param, reso_param
+
+    def _bind_freq_reso_encoders(self, device):
+        for idx in (4, 5):
+            try:
+                self._param_controls[idx].release_parameter()
+            except Exception:
+                pass
+        freq_param, reso_param = self._resolve_freq_reso_params(device)
+        if freq_param is not None:
+            try:
+                self._param_controls[4].connect_to(freq_param)
+            except Exception:
+                pass
+        if reso_param is not None:
+            try:
+                self._param_controls[5].connect_to(reso_param)
+            except Exception:
+                pass
+
+    def _attach_filter_type_listener(self, device):
+        self._detach_filter_type_listener()
+        ft_param = get_parameter_by_name(device, AUTOFILTER_PARAMS['FilterType'])
+        if ft_param is None or not hasattr(ft_param, 'add_value_listener'):
+            return
+        try:
+            ft_param.add_value_listener(self._on_filter_type_changed)
+            self._filter_type_listener_param = ft_param
+        except Exception:
+            self._filter_type_listener_param = None
+
+    def _detach_filter_type_listener(self):
+        if self._filter_type_listener_param is not None:
+            try:
+                self._filter_type_listener_param.remove_value_listener(self._on_filter_type_changed)
+            except Exception:
+                pass
+            self._filter_type_listener_param = None
+
+    def _on_filter_type_changed(self):
+        # User flipped Filter Type — re-evaluate encoders 4/5 only (other
+        # encoders + button bindings are static).
+        if self._device is not None:
+            self._bind_freq_reso_encoders(self._device)
 
     # --- Button handlers -------------------------------------------------
 
