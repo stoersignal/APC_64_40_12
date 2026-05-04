@@ -110,8 +110,11 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         pass
 
     def set_controls_and_buttons(self, controls, buttons):
-        assert ((controls is None) or (isinstance(controls, tuple) and (len(controls) == 8)))
-        assert ((buttons is None) or (isinstance(buttons, tuple) and (len(buttons) == 4)))
+        # EncoderUserModesComponent passes _modes_buttons as a Python list (built
+        # via .append in set_mode_buttons), not a tuple — so accept any sized
+        # sequence and just verify the length downstream code requires.
+        assert ((controls is None) or (len(controls) == 8))
+        assert ((buttons is None) or (len(buttons) == 4))
         self._param_controls = controls
         self._buttons = buttons
         self._update_controls_and_buttons()
