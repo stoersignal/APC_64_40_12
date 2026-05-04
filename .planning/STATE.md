@@ -111,7 +111,7 @@ None yet.
 | 260504-hea | use Stop All Clips to randomize macros in both Variations modes | 2026-05-04 | dd3c423 | [260504-hea-use-stop-all-clips-to-randomize-macros-i](./quick/260504-hea-use-stop-all-clips-to-randomize-macros-i/) |
 | 260504-i1b | toggle/momentary kill switches in EQ Smart Control mode (Shift + Send B) | 2026-05-04 | ecfd2a0 | [260504-i1b-toggle-momentary-kill-switches-in-eq-sma](./quick/260504-i1b-toggle-momentary-kill-switches-in-eq-sma/) |
 | 260504-ie1 | add Channel EQ support to TRACK CONTROL MODE 3 (Shift + Send B) | 2026-05-04 | 5660914 | [260504-ie1-add-channel-eq-support-to-track-control-](./quick/260504-ie1-add-channel-eq-support-to-track-control-/) |
-| 260504-jt9 | Eq8 gain encoders swap to Q on filter types without gain (LP/HP/Notch) | 2026-05-04 | _pending_ | [260504-jt9-eq8-gain-encoders-swap-to-q-on-filter-ty](./quick/260504-jt9-eq8-gain-encoders-swap-to-q-on-filter-ty/) |
+| 260504-jt9 | Eq8 gain encoders swap to Q on filter types without gain (LP/HP/Notch) | 2026-05-04 | 1eff437 | [260504-jt9-eq8-gain-encoders-swap-to-q-on-filter-ty](./quick/260504-jt9-eq8-gain-encoders-swap-to-q-on-filter-ty/) |
 
 ## Session Continuity
 
