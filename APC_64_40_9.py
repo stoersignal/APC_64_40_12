@@ -51,6 +51,7 @@ from .EncoderDeviceComponent import EncoderDeviceComponent
 from .EncoderAutoFilterComponent import EncoderAutoFilterComponent
 from .StepSequencerComponent import StepSequencerComponent
 from .ShiftableZoomingComponent import ShiftableZoomingComponent
+from .DrumRackModeComponent import DrumRackModeComponent
 
 class APC_64_40_9(APC):
     """ Script for Akai's APC40 Controller """
@@ -62,6 +63,7 @@ class APC_64_40_9(APC):
         self._sequencer = None
         self._pan16_top = None
         self._pan16_enc = None
+        self._drum_rack_mode = None
         APC.__init__(self, c_instance)
         self._device_selection_follows_track_selection = True
 
@@ -72,6 +74,7 @@ class APC_64_40_9(APC):
         self._sequencer = None
         self._pan16_top = None
         self._pan16_enc = None
+        self._drum_rack_mode = None
         APC.disconnect(self)
 
     def _setup_session_control(self):
@@ -149,7 +152,14 @@ class APC_64_40_9(APC):
         arm_buttons = []
         solo_buttons = []
         mute_buttons = []
-        sliders = []     
+        sliders = []
+        # Promoted to instance attributes so DrumRackModeComponent (wired in
+        # _setup_global_control) can reference the same per-track buttons
+        # without duplicating the construction loop. Same lists; the local
+        # names are kept for the rest of this method to minimise churn.
+        self._sliders = sliders
+        self._mute_buttons = mute_buttons
+        self._solo_buttons = solo_buttons
         for track in range(8):
             strip = self._mixer.channel_strip(track)
             strip.name = 'Channel_Strip_' + str(track)
@@ -320,7 +330,32 @@ class APC_64_40_9(APC):
         encoder_user_modes.name = 'Encoder_User_Modes' 
         self._encoder_shift_modes = ShiftableEncoderSelectorComponent(self, tuple(self._global_bank_buttons), encoder_user_modes, self._encoder_modes, self._encoder_eq_modes, self._encoder_device_modes)
         self._encoder_shift_modes.name = 'Encoder_Shift_Modes'
-        self._encoder_shift_modes.set_mode_toggle(self._shift_button)  
+        self._encoder_shift_modes.set_mode_toggle(self._shift_button)
+        # quick-260504-m2x — Drum Rack Mode overlay. Auto-engages on tracks
+        # whose first top-level device is a Live Drum Rack (DrumGroupDevice).
+        # Wired here at the end of _setup_global_control because all of its
+        # constructor refs (encoder_modes, _global_bank_buttons, _session,
+        # _stop_all_button, _up/_down_button, _shift_button, _mixer, plus
+        # the promoted self._sliders/_mute_buttons/_solo_buttons from
+        # _setup_mixer_control) now exist. trigger_initial_evaluation()
+        # fires once so Live booting with a drum-rack track already
+        # selected enters the mode immediately.
+        self._drum_rack_mode = DrumRackModeComponent(
+            parent=self,
+            mixer=self._mixer,
+            encoder_modes=self._encoder_modes,
+            sliders=tuple(self._sliders),
+            mute_buttons=tuple(self._mute_buttons),
+            solo_buttons=tuple(self._solo_buttons),
+            encoders=tuple(self._global_param_controls),
+            encoder_mode_buttons=tuple(self._global_bank_buttons),
+            bank_up_button=self._up_button,
+            bank_down_button=self._down_button,
+            stop_all_button=self._stop_all_button,
+            shift_button=self._shift_button,
+        )
+        self._drum_rack_mode.name = 'Drum_Rack_Mode'
+        self._drum_rack_mode.trigger_initial_evaluation()
 
 
     def _on_selected_track_changed(self):
