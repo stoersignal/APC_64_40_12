@@ -3,6 +3,14 @@ quick_id: 260504-8yh
 description: remove "MATRIX MODE 7 – USER/NOTE MODE 5" and add a new global variations mode
 date: 2026-05-04
 status: complete
+uat_passed: 2026-05-04
+final_commit: d1bb8fa
+commits:
+  - 2db6430 feat — initial Global Variations Mode + USER MODE 5 removal
+  - c6235c1 docs — STATE.md commit-hash backfill
+  - 0de8cd8 fix — visible_tracks instead of clip_slot.canonical_parent (returned Scene on Live 12)
+  - 3ef0475 debug — log_message diagnostics (removed in d1bb8fa)
+  - d1bb8fa fix — drop set_enabled/set_on_off_values on plain ButtonElement (scene-launch + bank-up/down crashed AttributeError on entry)
 ---
 
 # Quick Task 260504-8yh — Summary
@@ -54,15 +62,18 @@ grep -n 'Global Variations Mode' APC40_User_Manual.md  # 2 hits
 grep -n "data-mode=\"GlobalVariations\"\|'GlobalVariations'" docs/manual.html  # 2 hits
 ```
 
-## Hardware UAT (still required, in Live)
+## Hardware UAT (passed 2026-05-04)
 
-- Hold Shift + Track Select 7 → enter Global Variations Mode. Each column with a rack-having-variations on its track lights green pads; the currently selected variation per column is red.
-- Press a green pad → that variation recalls on that track's rack only; pad flips to red.
-- Press Scene Launch 1 → every column with a stored variation at row 0 recalls it; the column's pad-LED at row 0 flips to red.
-- Bank Down → window slides down by 1 row; pads repaint accordingly. Bank Up at offset 0 is a no-op.
-- Add/remove a rack on a visible track via Live's UI → that column rebinds without leaving the mode.
-- Scroll the session view → tracks-listener fires, columns rebind to the new visible tracks.
-- Leave the mode (cycle to ClipLaunch) → Scene Launch + Bank Select buttons resume their normal session behavior; Track Stop row keeps clip-stop throughout.
+User confirmed working in Ableton Live with racks-on-visible-tracks: pad recall (per-track), scene launch (global trigger), Bank Up/Down scroll, and clean transition out of the mode (scene-launch + bank-select restored to their normal session behavior).
+
+## Iteration history (notes for future similar tasks)
+
+Two non-obvious gotchas surfaced through UAT:
+
+- **`clip_slot.canonical_parent` returns the Scene on Live 12, not the Track.** First fix attempt (0de8cd8) switched to `self.song().visible_tracks[session.track_offset() + i]` — the proven pattern from `SpecialMixerComponent.py:46-47` in this codebase. Should be the first reach for "8 visible tracks" lookups in any future component.
+- **Scene-Launch and Bank-Select buttons are plain `_Framework.ButtonElement`, not `ConfigurableButtonElement`.** Calling `set_enabled(True)` / `set_on_off_values(...)` on them throws `AttributeError` and aborts whatever method is in flight before any value-listener side effects run. (Construction sites: `APC_64_40_9.py:81-82` and `:93`.) Plain `ButtonElement` is always enabled and routes value listeners directly; LED paint goes through `send_value(color)` without the on/off cache. Matrix pads (`self._matrix.get_button(...)`) remain `ConfigurableButtonElement` and continue to use the cached `set_on_off_values + send_value(force=True)` path.
+
+The diagnostic `log_message('[GlobalVar] ...')` instrumentation in 3ef0475 made the second issue visible immediately — the entry log printed but the rebind log never did, with the traceback in `Log.txt` pointing straight at `scene_button.set_enabled(True)`. Worth keeping in mind for future Live UAT loops: a few `log_message` calls beat any number of guesses.
 
 ## Out-of-scope follow-ups (deferred, not blocking)
 
