@@ -462,6 +462,7 @@ class MatrixModesComponent(ModeSelectorComponent):
     # Shift+Nudge Back).
 
     def _set_global_variations_mode(self):
+        self._parent.log_message('[GlobalVar] _set_global_variations_mode ENTRY')
         self._session_zoom.set_zoom_button(None)
         self._session_zoom.set_enabled(False)
 
@@ -655,14 +656,17 @@ class MatrixModesComponent(ModeSelectorComponent):
         # (Scenes have no `devices` attribute), so every column resolved to a
         # rack-less track and the grid stayed dark (UAT 2026-05-04).
         song = self.song()
+        visible = []
+        offset = 0
         try:
             visible = list(song.visible_tracks)
-        except Exception:
-            visible = []
+        except Exception as e:
+            self._parent.log_message('[GlobalVar] visible_tracks failed: ' + str(e))
         try:
             offset = int(self._session.track_offset())
-        except Exception:
-            offset = 0
+        except Exception as e:
+            self._parent.log_message('[GlobalVar] track_offset() failed: ' + str(e))
+        self._parent.log_message('[GlobalVar] rebind: visible=' + str(len(visible)) + ' offset=' + str(offset))
         tracks = []
         for track_index in range(8):
             idx = offset + track_index
@@ -670,6 +674,7 @@ class MatrixModesComponent(ModeSelectorComponent):
                 track = visible[idx]
                 # Defensive: only accept objects exposing a devices list.
                 if not hasattr(track, 'devices'):
+                    self._parent.log_message('[GlobalVar] col=' + str(track_index) + ' track has no devices attr; type=' + str(type(track).__name__))
                     track = None
             else:
                 track = None
@@ -677,7 +682,7 @@ class MatrixModesComponent(ModeSelectorComponent):
 
         # For each visible track: hook devices_listener; pick first rack with variation_count > 0.
         racks = []
-        for track in tracks:
+        for col_idx, track in enumerate(tracks):
             rack = None
             if track is not None:
                 if hasattr(track, 'add_devices_listener'):
@@ -688,16 +693,23 @@ class MatrixModesComponent(ModeSelectorComponent):
                         pass
                 try:
                     devices = list(track.devices)
-                except Exception:
+                except Exception as e:
+                    self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' track.devices failed: ' + str(e))
                     devices = []
+                self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' devices=' + str(len(devices)))
                 for device in devices:
-                    if hasattr(device, 'variation_count'):
+                    has_attr = hasattr(device, 'variation_count')
+                    vc = -1
+                    if has_attr:
                         try:
-                            if int(device.variation_count) > 0:
-                                rack = device
-                                break
-                        except Exception:
-                            continue
+                            vc = int(device.variation_count)
+                        except Exception as e:
+                            self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' variation_count read failed: ' + str(e))
+                    self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' device=' + str(getattr(device, 'name', '?')) + ' has_var_count=' + str(has_attr) + ' count=' + str(vc))
+                    if has_attr and vc > 0:
+                        rack = device
+                        break
+            self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' rack=' + ('NONE' if rack is None else getattr(rack, 'name', '?')))
             racks.append((track, rack))
             if rack is not None:
                 if hasattr(rack, 'add_variation_count_listener'):
@@ -730,7 +742,9 @@ class MatrixModesComponent(ModeSelectorComponent):
 
     def _global_var_refresh_leds(self):
         if self._global_var_pad_buttons is None:
+            self._parent.log_message('[GlobalVar] refresh_leds: pad_buttons is None — abort')
             return
+        self._parent.log_message('[GlobalVar] refresh_leds: racks=' + str([('NONE' if r is None else getattr(r, 'name', '?')) for (_t, r) in self._global_var_track_racks]))
         # Pads
         for col in range(8):
             track, rack = self._global_var_track_racks[col] if col < len(self._global_var_track_racks) else (None, None)
