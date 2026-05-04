@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Documentation
 status: executing
 stopped_at: Phase 6 planning complete — 8 PLAN.md files in .planning/phases/06-create-user-manual/, ROADMAP.md annotated with wave dependencies, all 10 DOC-NN requirements + 18 D-NN decisions covered (or correctly OOS)
-last_updated: "2026-05-02T06:55:46.855Z"
-last_activity: 2026-05-02 -- Phase 6 execution started
+last_updated: "2026-05-04T16:30:00Z"
+last_activity: 2026-05-04 -- Quick task 260504-k6p UAT-passed (final commit ee7c5ae); ready to resume Phase 6 execution
 progress:
   total_phases: 1
   completed_phases: 0
@@ -29,7 +29,7 @@ Milestone: v1.2 Documentation — **ready to execute** (planned 2026-05-02)
 Phase: 6 (create-user-manual) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 6
-Last activity: 2026-05-04 -- Completed quick task 260504-k6p: replace MODE 2 (Alternate Device) with AutoFilter mode
+Last activity: 2026-05-04 -- Quick task 260504-k6p UAT-passed (4-round debug, final commit ee7c5ae)
 
 Progress: [░░░░░░░░░░] 0% of v1.2
 
@@ -112,14 +112,14 @@ None yet.
 | 260504-i1b | toggle/momentary kill switches in EQ Smart Control mode (Shift + Send B) | 2026-05-04 | ecfd2a0 | [260504-i1b-toggle-momentary-kill-switches-in-eq-sma](./quick/260504-i1b-toggle-momentary-kill-switches-in-eq-sma/) |
 | 260504-ie1 | add Channel EQ support to TRACK CONTROL MODE 3 (Shift + Send B) | 2026-05-04 | 5660914 | [260504-ie1-add-channel-eq-support-to-track-control-](./quick/260504-ie1-add-channel-eq-support-to-track-control-/) |
 | 260504-jt9 | Eq8 gain encoders swap to Q on filter types without gain (LP/HP/Notch) | 2026-05-04 | 54104dc | [260504-jt9-eq8-gain-encoders-swap-to-q-on-filter-ty](./quick/260504-jt9-eq8-gain-encoders-swap-to-q-on-filter-ty/) |
-| 260504-k6p | replace MODE 2 (Alternate Device) with AutoFilter mode | 2026-05-04 | ebe0564 | [260504-k6p-replace-mode-2-alternate-device-with-aut](./quick/260504-k6p-replace-mode-2-alternate-device-with-aut/) |
+| 260504-k6p | replace MODE 2 (Alternate Device) with AutoFilter mode | 2026-05-04 | ee7c5ae | [260504-k6p-replace-mode-2-alternate-device-with-aut](./quick/260504-k6p-replace-mode-2-alternate-device-with-aut/) |
 
 ## Session Continuity
 
-Last session: 2026-05-02T08:45:00.000Z
-Stopped at: Phase 6 planning complete — 8 PLAN.md files in .planning/phases/06-create-user-manual/, ROADMAP.md annotated with wave dependencies, all 10 DOC-NN requirements + 18 D-NN decisions covered (or correctly OOS)
+Last session: 2026-05-04T16:30:00Z
+Stopped at: Quick task 260504-k6p UAT-passed (final commit ee7c5ae) — AutoFilter Mode (Shift + Send A) verified across all 6 LFO T Mode settings via 4-round debug session (resolved at .planning/debug/resolved/lfo-rate-encoder-dead.md).
 Resume file: None
-Next action: `/clear` then `/gsd-execute-phase 6`
+Next action: `/clear` then `/gsd-execute-phase 6` (resume v1.2 Documentation milestone — Phase 6 create-user-manual)
 
 ### Scaffold caveats
 

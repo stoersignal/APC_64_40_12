@@ -2,7 +2,8 @@
 quick_id: 260504-k6p
 description: replace MODE 2 (Alternate Device) with AutoFilter mode
 date: 2026-05-04
-status: complete
+status: uat-passed
+final_commit: ee7c5ae
 ---
 
 # Quick Task 260504-k6p — Summary
@@ -69,3 +70,63 @@ grep -n 'Auto Filter Mode' APC40_User_Manual.md        # 1 hit
 - Real-time re-detection on device-add (track-selection retrigger covers this).
 - Multi-state LED to display enum values for Slope / Filter Type — APC40 buttons are one-color on/off, so the LED just lights when the param is non-zero.
 - Removing the now-unused `EncoderDeviceComponent.py` — kept in the repo for reference; not instantiated anywhere.
+
+## Post-UAT follow-up (2026-05-04, 4 rounds, final commit ee7c5ae)
+
+UAT exposed that encoder 3 ("LFO Rate") was silently dead in every LFO mode.
+Investigation took four rounds because the bug was in a layer the spec doc
+didn't surface:
+
+1. **Round 1 (wrong)** — `'LFO Rate'` → `'LFO Frequency'` based on Ableton's
+   own `_Generic/Devices.py` AFL_BANK1 reference. AutoFilter2 (Live 11+) is
+   not the same device — the Live 9/10 `LFO Frequency` was split. Encoder
+   went dead with LED ring off (connect_to(None)). Regression.
+2. **Round 2** — One-shot Log.txt dump of `device.parameters` revealed the
+   AutoFilter2 LFO architecture: four independent rate params (`LFO Freq` /
+   `LFO Time` / `LFO Rate` / `LFO 16th`), one per `LFO T Mode` setting.
+   Implemented enum-driven re-bind pattern (mirrors existing Filter Type →
+   encoders 5/6 swap). Hz / Time / 4 / 16 modes worked — assumed prefix
+   list of 4 mode labels was complete.
+3. **Round 3** — UAT showed Time mode failed because actual labels weren't
+   what we guessed. Added one-shot dump of `LFO T Mode.value_items`. Live
+   reported `['Rate', 'Time', 'Synced', 'Triplet', 'Dotted', 'Sixteenth']`
+   — six modes, not four. Prefix-startswith approach silently mis-bound
+   `'Synced'` and `'Sixteenth'` (collided on `'S'` prefix) and unmatched
+   `'Rate'` / `'Triplet'` / `'Dotted'` (fallback path).
+4. **Round 4 (final)** — Replaced prefix list with exact-match dict keyed
+   by all six verified labels. `Synced` / `Triplet` / `Dotted` all map to
+   `LFO Rate` (T Mode reinterprets timing on the same subdivision param).
+   UAT-passed across all 6 modes.
+
+### Lessons reinforced
+
+- For any enum-driven param binding, run a one-shot `value_items` dump
+  before guessing prefixes. The cost (one log line) is trivial; the
+  alternative is multiple round-trip UAT cycles.
+- `connect_to(None)` and `get_parameter_by_name(...)` returning None are
+  both **silent** — neither raises, neither logs. A binding can be totally
+  broken without any visible signal except "encoder doesn't move things".
+- `parameter.is_enabled` lies (project-wide anti-pattern, again confirmed:
+  `'LFO Rate'` sync-mode param is `is_enabled=True` even when the LFO is
+  in Hz mode and that param has no UI presence).
+- Cross-version device class_names matter (`AutoFilter` Live 9/10 vs
+  `AutoFilter2` Live 11+) AND param taxonomies can change wholesale —
+  don't trust an old reference for a new generation.
+
+### Files changed in the follow-up
+
+| File | Change |
+|------|--------|
+| `EncoderAutoFilterComponent.py` | LFO_T_MODE_PARAM_KEYS dict (6 labels), `_resolve_lfo_rate_param`, `_bind_lfo_rate_encoder`, `_attach/_detach_lfo_t_mode_listener`, `_on_lfo_t_mode_changed`. Encoder 3 removed from static ENCODER_MAP. Diagnostic param + value_items dumps + unmatched-label warning. |
+| `.planning/debug/resolved/lfo-rate-encoder-dead.md` | Full debug session archive — 4 rounds with hypothesis / evidence / elimination / resolution. |
+
+### Final UAT (passed)
+
+- All 6 LFO T Mode settings: encoder 3 binds to the correct active rate
+  param, twisting moves the visible knob, LED ring tracks value.
+- Mode switch (Hz ↔ Time ↔ Synced ↔ Triplet ↔ Dotted ↔ Sixteenth) re-binds
+  encoder 3 instantly via the LFO T Mode listener.
+- Other top-row encoders (Drive / Env Attack / Env Release) and bottom-row
+  + bank buttons unaffected.
+- Vowel / DJ filter type swap on encoders 5/6 still works.
+- Track switch AutoFilter ↔ no-AutoFilter still releases / re-binds cleanly.
