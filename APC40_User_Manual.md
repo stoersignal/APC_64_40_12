@@ -121,3 +121,14 @@ By default, the 8 faders control Track Volume. You can repurpose them using Shif
 The Solo and Activator (Mute) buttons feature a smart state-machine:
 * **Short Tap**: Standard toggle (Turns Solo/Mute on or off).
 * **Long Hold (>400ms)**: Momentary toggle. The state will revert back to its original setting as soon as you release the button. Ideal for quick performative mutes or solo drops!
+
+---
+
+## TODO — Phase 6 integration
+
+* [Phase 6 / quick-260504-m2x] Drum Rack Mode: auto-engages on tracks with top-level drum rack;
+  retargets faders to chain volume, Mute/Solo to chain mute/solo (v1.0 toggle/momentary timing),
+  Track Control encoders to chain pan/send-A/B/C (per existing mode buttons), Bank Select up/down
+  to chain scrolling (when chains > 8). Exit: Shift + Stop All Clips (per-track scope). LED on
+  Stop All Clips indicates mode active. Detection class: 'DrumGroupDevice', top-level only.
+  See .planning/quick/260504-m2x-add-drum-rack-mode/ for full spec.
