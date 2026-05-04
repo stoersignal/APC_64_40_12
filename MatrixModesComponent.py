@@ -462,7 +462,6 @@ class MatrixModesComponent(ModeSelectorComponent):
     # Shift+Nudge Back).
 
     def _set_global_variations_mode(self):
-        self._parent.log_message('[GlobalVar] _set_global_variations_mode ENTRY')
         self._session_zoom.set_zoom_button(None)
         self._session_zoom.set_enabled(False)
 
@@ -484,31 +483,31 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._global_var_pad_buttons = pad_buttons
 
         # Take over Scene Launch buttons. scene.set_launch_button(None) detaches
-        # Live's clip-launch binding; we re-attach in teardown.
+        # Live's clip-launch binding; we re-attach in teardown. NB: these are
+        # plain _Framework.ButtonElement instances (APC_64_40_9.py:93) — they
+        # do NOT expose `set_enabled` (that's a ConfigurableButtonElement-only
+        # method, ConfigurableButtonElement.py:33-34). Calling it crashes with
+        # AttributeError, which is what kept the grid dark on UAT 2026-05-04.
         scene_buttons = []
         for scene_index in range(5):
             scene = self._session.scene(scene_index)
             scene.set_launch_button(None)
             scene_button = self._parent._scene_launch_buttons[scene_index]
-            scene_button.use_default_message()
-            scene_button.set_enabled(True)
             scene_buttons.append(scene_button)
         for button in scene_buttons:
             button.add_value_listener(self._global_var_scene_value, identify_sender=True)
         self._global_var_scene_buttons = scene_buttons
 
         # Take over Bank Select Up/Down. Detach the session's scene-bank wiring
-        # so the buttons no longer page scenes while in this mode.
+        # so the buttons no longer page scenes while in this mode. Like the
+        # scene-launch buttons, these are plain ButtonElement (APC_64_40_9.py:81-82)
+        # and so do NOT expose set_enabled / set_on_off_values.
         try:
             self._session.set_scene_bank_buttons(None, None)
         except Exception:
             pass
         up_button = self._parent._up_button
         down_button = self._parent._down_button
-        up_button.use_default_message()
-        up_button.set_enabled(True)
-        down_button.use_default_message()
-        down_button.set_enabled(True)
         up_button.add_value_listener(self._global_var_bank_up_value)
         down_button.add_value_listener(self._global_var_bank_down_value)
         self._global_var_bank_up_button = up_button
@@ -556,8 +555,9 @@ class MatrixModesComponent(ModeSelectorComponent):
                     button.remove_value_listener(self._global_var_scene_value)
                 except Exception:
                     pass
+                # Plain ButtonElement: send 0 directly (no set_on_off_values call).
                 try:
-                    button.send_value(0, True)
+                    button.send_value(0)
                 except Exception:
                     pass
             # Restore Live's scene clip-launch binding so scenes fire normally
@@ -660,21 +660,18 @@ class MatrixModesComponent(ModeSelectorComponent):
         offset = 0
         try:
             visible = list(song.visible_tracks)
-        except Exception as e:
-            self._parent.log_message('[GlobalVar] visible_tracks failed: ' + str(e))
+        except Exception:
+            visible = []
         try:
             offset = int(self._session.track_offset())
-        except Exception as e:
-            self._parent.log_message('[GlobalVar] track_offset() failed: ' + str(e))
-        self._parent.log_message('[GlobalVar] rebind: visible=' + str(len(visible)) + ' offset=' + str(offset))
+        except Exception:
+            offset = 0
         tracks = []
         for track_index in range(8):
             idx = offset + track_index
             if 0 <= idx < len(visible):
                 track = visible[idx]
-                # Defensive: only accept objects exposing a devices list.
                 if not hasattr(track, 'devices'):
-                    self._parent.log_message('[GlobalVar] col=' + str(track_index) + ' track has no devices attr; type=' + str(type(track).__name__))
                     track = None
             else:
                 track = None
@@ -682,7 +679,7 @@ class MatrixModesComponent(ModeSelectorComponent):
 
         # For each visible track: hook devices_listener; pick first rack with variation_count > 0.
         racks = []
-        for col_idx, track in enumerate(tracks):
+        for track in tracks:
             rack = None
             if track is not None:
                 if hasattr(track, 'add_devices_listener'):
@@ -693,23 +690,16 @@ class MatrixModesComponent(ModeSelectorComponent):
                         pass
                 try:
                     devices = list(track.devices)
-                except Exception as e:
-                    self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' track.devices failed: ' + str(e))
+                except Exception:
                     devices = []
-                self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' devices=' + str(len(devices)))
                 for device in devices:
-                    has_attr = hasattr(device, 'variation_count')
-                    vc = -1
-                    if has_attr:
+                    if hasattr(device, 'variation_count'):
                         try:
-                            vc = int(device.variation_count)
-                        except Exception as e:
-                            self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' variation_count read failed: ' + str(e))
-                    self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' device=' + str(getattr(device, 'name', '?')) + ' has_var_count=' + str(has_attr) + ' count=' + str(vc))
-                    if has_attr and vc > 0:
-                        rack = device
-                        break
-            self._parent.log_message('[GlobalVar] col=' + str(col_idx) + ' rack=' + ('NONE' if rack is None else getattr(rack, 'name', '?')))
+                            if int(device.variation_count) > 0:
+                                rack = device
+                                break
+                        except Exception:
+                            continue
             racks.append((track, rack))
             if rack is not None:
                 if hasattr(rack, 'add_variation_count_listener'):
@@ -742,9 +732,7 @@ class MatrixModesComponent(ModeSelectorComponent):
 
     def _global_var_refresh_leds(self):
         if self._global_var_pad_buttons is None:
-            self._parent.log_message('[GlobalVar] refresh_leds: pad_buttons is None — abort')
             return
-        self._parent.log_message('[GlobalVar] refresh_leds: racks=' + str([('NONE' if r is None else getattr(r, 'name', '?')) for (_t, r) in self._global_var_track_racks]))
         # Pads
         for col in range(8):
             track, rack = self._global_var_track_racks[col] if col < len(self._global_var_track_racks) else (None, None)
@@ -779,6 +767,8 @@ class MatrixModesComponent(ModeSelectorComponent):
                 except Exception:
                     pass
         # Scene Launch row — green if at least one column has a stored variation at that row.
+        # NB: scene-launch buttons are plain ButtonElement, so no set_on_off_values —
+        # send_value directly carries the LED MIDI.
         if self._global_var_scene_buttons is not None:
             for row in range(5):
                 variation_index = self._global_var_bank_offset + row
@@ -795,8 +785,7 @@ class MatrixModesComponent(ModeSelectorComponent):
                 color = 1 if any_stored else 0
                 button = self._global_var_scene_buttons[row]
                 try:
-                    button.set_on_off_values(color if color != 0 else 127, 0)
-                    button.send_value(color, True)
+                    button.send_value(color)
                 except Exception:
                     pass
 
