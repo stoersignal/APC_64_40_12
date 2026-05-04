@@ -949,22 +949,41 @@ class EncoderEQComponent(ControlSurfaceComponent):
         # Listen for filter-type changes so the gain↔Q swap re-evaluates in real time.
         self._eq8_attach_filter_type_listeners(eq8_device)
 
+    # EQ8 filter-type values that have no gain control (per Live's UI):
+    #   0 = 48 dB Low Cut, 1 = 12 dB Low Cut, 4 = Notch,
+    #   6 = 12 dB High Cut, 7 = 48 dB High Cut.
+    # Types 2 (Low Shelf), 3 (Bell), 5 (High Shelf) DO have gain.
+    # NB: parameter.is_enabled is unreliable here — Live keeps the gain
+    # parameter `is_enabled = True` even on no-gain filter types, which is
+    # why the original 1eff437 implementation always fell into the gain
+    # branch (UAT 2026-05-04). Reading the filter-type value directly is
+    # the reliable test.
+    EQ8_NO_GAIN_TYPES = (0, 1, 4, 6, 7)
+
     def _eq8_apply_q_overrides(self, eq8_device):
         # band → encoder index that drives this band's gain (per the EQ_DEVICES['Eq8'].Gains
         # mapping: bands 1, 2, 8 land on encoders 5, 6, 7 respectively).
         for band, encoder_idx in ((1, 5), (8, 7)):
             gain_param = get_parameter_by_name(eq8_device, '%i Gain A' % band)
+            ft_param = get_parameter_by_name(eq8_device, '%i Filter Type A' % band)
             if gain_param is None:
                 continue
-            try:
-                gain_enabled = bool(gain_param.is_enabled)
-            except Exception:
-                gain_enabled = True
-            if gain_enabled:
+            ft_value = -1
+            if ft_param is not None:
+                try:
+                    ft_value = int(ft_param.value)
+                except Exception:
+                    ft_value = -1
+            no_gain = ft_value in self.EQ8_NO_GAIN_TYPES
+            self._parent.log_message(
+                '[Eq8] band=%d filter_type=%d no_gain=%s → encoder %d %s'
+                % (band, ft_value, no_gain, encoder_idx, 'Q' if no_gain else 'Gain')
+            )
+            if not no_gain:
                 # Filter type has gain — bind the encoder to the gain parameter.
-                # (Even though _track_eq.set_gain_controls already wired this, we
-                # re-assert here so a previous Q override on the same encoder
-                # gets replaced when the user switches to a band type with gain.)
+                # (Re-assert even when _track_eq.set_gain_controls already wired
+                # it, so a previous Q override gets replaced when the user
+                # switches the band to a type with gain.)
                 try:
                     self._param_controls[encoder_idx].release_parameter()
                     self._param_controls[encoder_idx].connect_to(gain_param)
