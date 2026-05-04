@@ -649,14 +649,29 @@ class MatrixModesComponent(ModeSelectorComponent):
                     pass
         self._global_var_listened_devices = []
 
-        # Resolve the 8 visible tracks via clip_slot.canonical_parent — works
-        # regardless of how the SessionComponent reports track_offset.
+        # Resolve the 8 visible tracks via song.visible_tracks + session.track_offset()
+        # — the proven pattern from SpecialMixerComponent.py:46-47. The earlier
+        # clip_slot.canonical_parent route returned the SCENE on this Live build
+        # (Scenes have no `devices` attribute), so every column resolved to a
+        # rack-less track and the grid stayed dark (UAT 2026-05-04).
+        song = self.song()
+        try:
+            visible = list(song.visible_tracks)
+        except Exception:
+            visible = []
+        try:
+            offset = int(self._session.track_offset())
+        except Exception:
+            offset = 0
         tracks = []
         for track_index in range(8):
-            try:
-                clip_slot = self._session.scene(0).clip_slot(track_index)
-                track = clip_slot.canonical_parent
-            except Exception:
+            idx = offset + track_index
+            if 0 <= idx < len(visible):
+                track = visible[idx]
+                # Defensive: only accept objects exposing a devices list.
+                if not hasattr(track, 'devices'):
+                    track = None
+            else:
                 track = None
             tracks.append(track)
 
