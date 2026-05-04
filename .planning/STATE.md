@@ -107,7 +107,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260504-5j0 | replace "MATRIX MODE 8 – USER/NOTE MODE 6" with a new "Variations MODE" | 2026-05-04 | 716fb89 | [260504-5j0-replace-matrix-mode-8-user-note-mode-6-w](./quick/260504-5j0-replace-matrix-mode-8-user-note-mode-6-w/) |
-| 260504-8yh | remove "MATRIX MODE 7 – USER/NOTE MODE 5" and add a new global variations mode | 2026-05-04 | _pending_ | [260504-8yh-remove-matrix-mode-7-user-note-mode-5-an](./quick/260504-8yh-remove-matrix-mode-7-user-note-mode-5-an/) |
+| 260504-8yh | remove "MATRIX MODE 7 – USER/NOTE MODE 5" and add a new global variations mode | 2026-05-04 | 2db6430 | [260504-8yh-remove-matrix-mode-7-user-note-mode-5-an](./quick/260504-8yh-remove-matrix-mode-7-user-note-mode-5-an/) |
 
 ## Session Continuity
 
