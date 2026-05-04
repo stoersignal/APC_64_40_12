@@ -58,7 +58,10 @@ EQ_DEVICES = {# Eq8 has 8 bands; we use bands 1, 2, 8 → Low / Mid / High so th
 # to Log.txt under '[Eq8]' so they can be verified after one UAT activation.
 EQ8_EXTRAS = {
     'Scale': 'Scale',
-    'Output': 'Output Gain',
+    # Verified via Log.txt dump on UAT 2026-05-04 — Eq8's output trim is
+    # named 'Output' (same as ChannelEq). 'Output Gain' was the initial
+    # guess and silently no-op'd on encoder 4.
+    'Output': 'Output',
     'LowFreq': '1 Frequency A',
     'MidFreq': '2 Frequency A',
     'HighFreq': '8 Frequency A',
@@ -601,7 +604,6 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._filter_eq3_logged = False  # one-shot Log.txt dump of FilterEQ3 param names
         # Eq8 state — top-row encoders (0/1/2/3) + encoder 4 take Scale / band freqs / Output.
         self._eq8_device = None
-        self._eq8_logged = False  # one-shot Log.txt dump of Eq8 param names
 
     def disconnect(self):
         self._teardown_channel_eq_extras()
@@ -893,16 +895,6 @@ class EncoderEQComponent(ControlSurfaceComponent):
     # --- Eq8 top-row encoder takeover (Scale + 3× band freq + Output) ------
 
     def _setup_eq8_extras(self, eq8_device):
-        # One-shot Log.txt dump — same self-verifying pattern as ChannelEq /
-        # FilterEQ3. Catches param-name mismatches in one UAT round.
-        if not self._eq8_logged:
-            self._eq8_logged = True
-            try:
-                self._parent.log_message('[Eq8] params on detected device:')
-                for p in eq8_device.parameters:
-                    self._parent.log_message('[Eq8]   ' + repr(p.name))
-            except Exception as e:
-                self._parent.log_message('[Eq8] params introspection failed: ' + str(e))
         # Release the five encoders we're about to take over so any prior
         # AutoFilter / appointed-device binding is dropped first.
         for idx in (0, 1, 2, 3, 4):
