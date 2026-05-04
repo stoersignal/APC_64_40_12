@@ -112,7 +112,7 @@ None yet.
 | 260504-i1b | toggle/momentary kill switches in EQ Smart Control mode (Shift + Send B) | 2026-05-04 | ecfd2a0 | [260504-i1b-toggle-momentary-kill-switches-in-eq-sma](./quick/260504-i1b-toggle-momentary-kill-switches-in-eq-sma/) |
 | 260504-ie1 | add Channel EQ support to TRACK CONTROL MODE 3 (Shift + Send B) | 2026-05-04 | 5660914 | [260504-ie1-add-channel-eq-support-to-track-control-](./quick/260504-ie1-add-channel-eq-support-to-track-control-/) |
 | 260504-jt9 | Eq8 gain encoders swap to Q on filter types without gain (LP/HP/Notch) | 2026-05-04 | 54104dc | [260504-jt9-eq8-gain-encoders-swap-to-q-on-filter-ty](./quick/260504-jt9-eq8-gain-encoders-swap-to-q-on-filter-ty/) |
-| 260504-k6p | replace MODE 2 (Alternate Device) with AutoFilter mode | 2026-05-04 | _pending_ | [260504-k6p-replace-mode-2-alternate-device-with-aut](./quick/260504-k6p-replace-mode-2-alternate-device-with-aut/) |
+| 260504-k6p | replace MODE 2 (Alternate Device) with AutoFilter mode | 2026-05-04 | ebe0564 | [260504-k6p-replace-mode-2-alternate-device-with-aut](./quick/260504-k6p-replace-mode-2-alternate-device-with-aut/) |
 
 ## Session Continuity
 
