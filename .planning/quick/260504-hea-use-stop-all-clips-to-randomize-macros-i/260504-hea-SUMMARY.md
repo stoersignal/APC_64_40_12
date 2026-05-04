@@ -3,6 +3,11 @@ quick_id: 260504-hea
 description: use Stop All Clips to randomize macros in both Variations modes
 date: 2026-05-04
 status: complete
+uat_passed: 2026-05-04
+final_commit: dd3c423
+commits:
+  - dd3c423 feat — Stop All Clips → randomize_macros wired in both Variations modes
+  - ec4df18 docs — STATE.md commit-hash backfill
 ---
 
 # Quick Task 260504-hea — Summary
@@ -34,11 +39,9 @@ The **Stop All Clips** button (APC40 note 81, plain `_Framework.ButtonElement`) 
 - We only call `add_value_listener` / `remove_value_listener` and let the framework wire MIDI dispatch normally.
 - Detach via `_session.set_stop_all_clips_button(None)` before adding our listener, restore it on teardown — same pattern used for Bank Select Up/Down in slot 6.
 
-## Hardware UAT (still required, in Live)
+## Hardware UAT (passed 2026-05-04)
 
-- Enter slot 7 (Shift + Track Select 8) with a Rack appointed → press Stop All Clips → macro values jump to randomized positions; combine with Shift+Tap Tempo to capture as a new variation.
-- Enter slot 6 (Shift + Track Select 7) with racks on multiple tracks → press Stop All Clips → every column's rack randomizes simultaneously.
-- Leave either mode → Stop All Clips reverts to "stop all clips" session behavior.
+User confirmed working in Ableton Live: Stop All Clips randomizes macros on the appointed device in slot 7, and on every column's rack in slot 6. Default clip-stop behavior restored on mode exit. No iteration cycles needed — the lessons accumulated through 260504-5j0 and 260504-8yh (plain `ButtonElement` semantics, hasattr-guarded Live API calls, takeover-and-restore pattern) made this land first try.
 
 ## Out of scope
 
