@@ -40,11 +40,10 @@ from _Generic.Devices import *
 # 'Env Release' / 'Env Amount' and exposes 'S/C On' / 'Soft Clip On' as
 # the natural performance toggles (there is no 'LFO On' param).
 AUTOFILTER_PARAMS = {
-    # Static encoders (don't change with filter type)
+    # Static encoders (don't change with filter type or LFO mode)
     'Drive':       'Drive',
     'EnvAttack':   'Env Attack',
     'EnvRelease':  'Env Release',
-    'LFORate':     'LFO Rate',
     'EnvAmount':   'Env Amount',
     'LFOAmount':   'LFO Amount',
     # Filter-type-dependent encoders (resolved at setup-time):
@@ -53,6 +52,13 @@ AUTOFILTER_PARAMS = {
     'Pitch':       'Pitch',       # Vowel filter
     'Formant':     'Formant',     # Vowel filter
     'Control':     'Control',     # DJ filter
+    # LFO-T-Mode-dependent encoder 3 (AutoFilter2 has four rate params, one per
+    # mode; the GUI knob shows whichever is active — see _resolve_lfo_rate_param):
+    'LFOTMode':    'LFO T Mode',
+    'LFOFreq':     'LFO Freq',    # Hz mode
+    'LFOTime':     'LFO Time',    # S mode (seconds)
+    'LFORate':     'LFO Rate',    # 4 mode (4-bar sync)
+    'LFO16th':     'LFO 16th',    # 16 mode (16th-note sync)
     # Buttons
     'Slope':       'Filter Slope',
     'FilterType':  'Filter Type',
@@ -61,18 +67,31 @@ AUTOFILTER_PARAMS = {
 }
 
 # Encoder index → AUTOFILTER_PARAMS key. Order: top row 0..3, bottom row 4..7.
-# Encoders 4 and 5 are placeholders here — the actual freq/resonance binding
-# is decided per filter type by _resolve_freq_reso_params (Vowel → Pitch /
-# Formant; DJ → Control / —; else → Frequency / Resonance).
+# Encoders 3, 4, 5 are dynamic and not in this static map:
+#   - 3 wired by _bind_lfo_rate_encoder (resolves via LFO T Mode → LFO Freq / Time / Rate / 16th)
+#   - 4, 5 wired by _bind_freq_reso_encoders (Vowel → Pitch/Formant; DJ → Control/—; else → Frequency/Resonance)
 ENCODER_MAP = (
     (0, 'Drive'),
     (1, 'EnvAttack'),
     (2, 'EnvRelease'),
-    (3, 'LFORate'),
-    # 4, 5 wired by _bind_freq_reso_encoders
     (6, 'EnvAmount'),
     (7, 'LFOAmount'),
 )
+
+# LFO T Mode value-items label → AUTOFILTER_PARAMS key for the active rate param.
+# Verified via Log.txt diagnostic on AutoFilter2 (Live 11+):
+#   value_items = ['Rate', 'Time', 'Synced', 'Triplet', 'Dotted', 'Sixteenth']
+# 'Rate'/'Time' are free-running modes (Hz / seconds); 'Synced'/'Triplet'/'Dotted'
+# all use the same LFO Rate beat-subdivision param (the T Mode picks the timing
+# interpretation, the param picks the subdivision); 'Sixteenth' uses LFO 16th.
+LFO_T_MODE_PARAM_KEYS = {
+    'Rate':      'LFOFreq',    # Hz / free-running
+    'Time':      'LFOTime',    # seconds
+    'Synced':    'LFORate',    # beat-synced subdivisions
+    'Triplet':   'LFORate',    # triplet timing on the same subdivision selector
+    'Dotted':    'LFORate',    # dotted timing on the same subdivision selector
+    'Sixteenth': 'LFO16th',    # 16th-note multiples (separate param)
+}
 
 # Button index → (AUTOFILTER_PARAMS key, mode 'cycle' | 'toggle')
 BUTTON_MAP = (
@@ -114,6 +133,16 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         self._led_listeners = []
         # Filter-type listener so encoders 4/5 swap when user picks Vowel / DJ.
         self._filter_type_listener_param = None
+        # LFO T Mode listener so encoder 3 swaps among LFO Freq / Time / Rate / 16th.
+        self._lfo_t_mode_listener_param = None
+        # One-shot Log.txt dump of the detected AutoFilter's parameter list, so any
+        # original_name vs GUI-label mismatch (the cause of the LFO Rate = 'LFO Frequency'
+        # bug) surfaces immediately on first activation. Same pattern as
+        # EncoderEQComponent._setup_slope_button (FilterEQ3 dump).
+        self._params_logged = False
+        # One-shot dump of LFO T Mode's value_items so any unmatched mode label
+        # (e.g. 'Hertz' vs 'Hz', 'Time' vs 'S') surfaces on first resolution.
+        self._lfo_modes_logged = False
 
     def disconnect(self):
         self._teardown_bindings()
@@ -184,8 +213,23 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         self._device = device
         if device is None:
             return  # no AutoFilter on this track — fail quiet, all controls dark
+        # Self-verifying param dump on first detection (sister-component pattern).
+        if not self._params_logged:
+            self._params_logged = True
+            try:
+                cls = getattr(device, 'class_name', '?')
+                self._parent.log_message('[AutoFilter] detected device class: ' + repr(cls))
+                for prm in device.parameters:
+                    nm = getattr(prm, 'name', '?')
+                    on = getattr(prm, 'original_name', nm)
+                    self._parent.log_message('[AutoFilter]   name=' + repr(nm) + '  original_name=' + repr(on))
+            except Exception as e:
+                try:
+                    self._parent.log_message('[AutoFilter] params dump failed: ' + str(e))
+                except Exception:
+                    pass
 
-        # Bind static encoders (0/1/2/3/6/7).
+        # Bind static encoders (0/1/2/6/7).
         for idx, key in ENCODER_MAP:
             try:
                 self._param_controls[idx].release_parameter()
@@ -197,6 +241,10 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
                     self._param_controls[idx].connect_to(param)
                 except Exception:
                     pass
+
+        # LFO-T-Mode-dependent encoder 3 (LFO Freq / Time / Rate / 16th).
+        self._bind_lfo_rate_encoder(device)
+        self._attach_lfo_t_mode_listener(device)
 
         # Filter-type-dependent encoders 4 and 5 (Frequency/Resonance ↔ Pitch/Formant ↔ Control).
         self._bind_freq_reso_encoders(device)
@@ -263,6 +311,8 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         self._led_listeners = []
         # Filter-type listener.
         self._detach_filter_type_listener()
+        # LFO T Mode listener.
+        self._detach_lfo_t_mode_listener()
 
     # --- Filter-type-dependent freq/reso binding ------------------------
 
@@ -330,6 +380,87 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         # encoders + button bindings are static).
         if self._device is not None:
             self._bind_freq_reso_encoders(self._device)
+
+    # --- LFO-T-Mode-dependent rate binding ------------------------------
+
+    def _resolve_lfo_rate_param(self, device):
+        """ Return the active LFO-rate Parameter based on LFO T Mode.
+        AutoFilter2 has four independent rate params (LFO Freq / LFO Time /
+        LFO Rate / LFO 16th); only the one matching the current T Mode is
+        wired to the visible 'LFO Rate' GUI knob. """
+        mode_param = get_parameter_by_name(device, AUTOFILTER_PARAMS['LFOTMode'])
+        label = None
+        items = []
+        if mode_param is not None:
+            try:
+                value = int(round(float(mode_param.value)))
+                items = list(getattr(mode_param, 'value_items', []))
+                if 0 <= value < len(items):
+                    label = str(items[value]).strip()
+            except Exception:
+                label = None
+        # One-shot diagnostic — surface the actual mode labels so any future
+        # unmatched label is obvious in Log.txt rather than producing a silent
+        # wrong binding.
+        if not self._lfo_modes_logged:
+            self._lfo_modes_logged = True
+            try:
+                self._parent.log_message('[AutoFilter] LFO T Mode value_items: ' + repr(items))
+            except Exception:
+                pass
+        rate_key = LFO_T_MODE_PARAM_KEYS.get(label) if label else None
+        if rate_key is None:
+            # Unmatched mode label. Log the surprise so we can patch
+            # LFO_T_MODE_PARAM_KEYS, and fall back to the first existing rate
+            # param so the encoder isn't dead. Hz is AutoFilter2's default.
+            try:
+                self._parent.log_message(
+                    '[AutoFilter] unmatched LFO T Mode label ' + repr(label) +
+                    ' — falling back. Add a prefix to LFO_T_MODE_PARAM_KEYS.')
+            except Exception:
+                pass
+            for key in ('LFOFreq', 'LFORate', 'LFOTime', 'LFO16th'):
+                p = get_parameter_by_name(device, AUTOFILTER_PARAMS[key])
+                if p is not None:
+                    return p
+            return None
+        return get_parameter_by_name(device, AUTOFILTER_PARAMS[rate_key])
+
+    def _bind_lfo_rate_encoder(self, device):
+        try:
+            self._param_controls[3].release_parameter()
+        except Exception:
+            pass
+        rate_param = self._resolve_lfo_rate_param(device)
+        if rate_param is not None:
+            try:
+                self._param_controls[3].connect_to(rate_param)
+            except Exception:
+                pass
+
+    def _attach_lfo_t_mode_listener(self, device):
+        self._detach_lfo_t_mode_listener()
+        mode_param = get_parameter_by_name(device, AUTOFILTER_PARAMS['LFOTMode'])
+        if mode_param is None or not hasattr(mode_param, 'add_value_listener'):
+            return
+        try:
+            mode_param.add_value_listener(self._on_lfo_t_mode_changed)
+            self._lfo_t_mode_listener_param = mode_param
+        except Exception:
+            self._lfo_t_mode_listener_param = None
+
+    def _detach_lfo_t_mode_listener(self):
+        if self._lfo_t_mode_listener_param is not None:
+            try:
+                self._lfo_t_mode_listener_param.remove_value_listener(self._on_lfo_t_mode_changed)
+            except Exception:
+                pass
+            self._lfo_t_mode_listener_param = None
+
+    def _on_lfo_t_mode_changed(self):
+        # User flipped LFO T Mode — re-bind encoder 3 to the now-active rate param.
+        if self._device is not None:
+            self._bind_lfo_rate_encoder(self._device)
 
     # --- Button handlers -------------------------------------------------
 
