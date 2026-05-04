@@ -576,9 +576,15 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._highpass_button = None
         self._highpass_parameter = None
         self._highpass_listener_attached = False
+        # FilterEQ3 state — Pan button toggles the device's Slope parameter (24 ↔ 48 dB/oct).
+        self._slope_button = None
+        self._slope_parameter = None
+        self._slope_listener_attached = False
+        self._filter_eq3_logged = False  # one-shot Log.txt dump of FilterEQ3 param names
 
     def disconnect(self):
         self._teardown_channel_eq_extras()
+        self._teardown_slope_button()
         self._param_controls = None
         self._mixer = None
         self._buttons = None
@@ -620,12 +626,17 @@ class EncoderEQComponent(ControlSurfaceComponent):
             self._param_controls[5], self._param_controls[6], self._param_controls[7]
         ]))
 
-        # Channel EQ wins on encoders 0/4 + Pan button when present;
-        # otherwise fall back to AutoFilter on encoders 0/4 and lock on Pan.
+        # Pan-button role hierarchy (per device class on the active EQ):
+        #   ChannelEq  → Highpass on/off  (encoders 0/4 also taken)
+        #   FilterEQ3  → Slope toggle (24 ↔ 48 dB/oct)
+        #   anything   → lock (default — preserves the original behavior)
+        # Always tear down BOTH conditional bindings before deciding which to set up,
+        # so switching tracks between device classes leaves no stale listener.
         channel_eq = self._detect_channel_eq()
         if channel_eq is not None:
             self._track_filter.set_track(None)
             self._teardown_channel_eq_extras()
+            self._teardown_slope_button()
             self._channel_eq_device = channel_eq
             self._setup_channel_eq_extras(channel_eq)
             self.set_lock_button(None)
@@ -636,7 +647,14 @@ class EncoderEQComponent(ControlSurfaceComponent):
             self._track_filter.set_filter_controls(
                 self._param_controls[0], self._param_controls[4]
             )
-            self.set_lock_button(self._buttons[0])
+            eq_device = getattr(self._track_eq, '_device', None)
+            if eq_device is not None and getattr(eq_device, 'class_name', None) == 'FilterEQ3':
+                self._teardown_slope_button()
+                self._setup_slope_button(self._buttons[0], eq_device)
+                self.set_lock_button(None)
+            else:
+                self._teardown_slope_button()
+                self.set_lock_button(self._buttons[0])
 
         if self._is_locked != True:
             self._strip = self._mixer._selected_strip
@@ -752,6 +770,81 @@ class EncoderEQComponent(ControlSurfaceComponent):
                 self._highpass_button.turn_on()
             else:
                 self._highpass_button.turn_off()
+        except Exception:
+            pass
+
+    # --- FilterEQ3 Slope toggle (Pan button on FilterEQ3 tracks) -----------
+
+    def _setup_slope_button(self, button, filter_eq3):
+        # One-shot Log.txt dump on first FilterEQ3 detection so the parameter
+        # name guess is self-verifying — same pattern as the Channel EQ dump
+        # in 5248cce that caught 'Output Gain' vs 'Output' (5660914).
+        if not self._filter_eq3_logged:
+            self._filter_eq3_logged = True
+            try:
+                self._parent.log_message('[FilterEQ3] params on detected device:')
+                for p in filter_eq3.parameters:
+                    self._parent.log_message('[FilterEQ3]   ' + repr(p.name))
+            except Exception as e:
+                self._parent.log_message('[FilterEQ3] params introspection failed: ' + str(e))
+        self._teardown_slope_button()
+        if button is None or filter_eq3 is None:
+            return
+        slope = get_parameter_by_name(filter_eq3, 'Slope')
+        if slope is None:
+            return
+        self._slope_button = button
+        self._slope_parameter = slope
+        try:
+            button.add_value_listener(self._slope_value)
+        except Exception:
+            pass
+        try:
+            slope.add_value_listener(self._on_slope_changed)
+            self._slope_listener_attached = True
+        except Exception:
+            pass
+        self._update_slope_led()
+
+    def _teardown_slope_button(self):
+        if self._slope_button is not None:
+            try:
+                self._slope_button.remove_value_listener(self._slope_value)
+            except Exception:
+                pass
+            self._slope_button = None
+        if self._slope_listener_attached and self._slope_parameter is not None:
+            try:
+                self._slope_parameter.remove_value_listener(self._on_slope_changed)
+            except Exception:
+                pass
+        self._slope_listener_attached = False
+        self._slope_parameter = None
+
+    def _slope_value(self, value):
+        if value == 0:
+            return
+        if self._slope_parameter is None:
+            return
+        try:
+            cur = float(self._slope_parameter.value)
+            self._slope_parameter.value = 0.0 if cur > 0 else 1.0
+        except Exception:
+            pass
+
+    def _on_slope_changed(self):
+        self._update_slope_led()
+
+    def _update_slope_led(self):
+        # LED on = 48 dB/oct (the steeper / "doubled" slope, matching how
+        # Live's UI darkens the Slope button when 48 is engaged).
+        if self._slope_button is None or self._slope_parameter is None:
+            return
+        try:
+            if float(self._slope_parameter.value) > 0:
+                self._slope_button.turn_on()
+            else:
+                self._slope_button.turn_off()
         except Exception:
             pass
 
