@@ -809,16 +809,27 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         if self._session is None:
             return
         try:
-            should_take = self._active and len(self._get_chains()) > NUM_STRIPS
+            chain_count = len(self._get_chains())
+            should_take = self._active and chain_count > NUM_STRIPS
             if should_take and not self._scene_nav_taken:
                 self._session.set_scene_bank_buttons(None, None)
                 self._scene_nav_taken = True
+                try:
+                    self._parent.log_message(
+                        '[DrumRack] scene-bank ownership TAKEN (chains=' + repr(chain_count) + ')')
+                except Exception:
+                    pass
             elif (not should_take) and self._scene_nav_taken:
                 # Restore. SessionComponent.set_scene_bank_buttons signature
                 # is (down, up) — match the binding established in __init__
                 # of APC_64_40_9 (line 94).
                 self._session.set_scene_bank_buttons(self._bank_down_button, self._bank_up_button)
                 self._scene_nav_taken = False
+                try:
+                    self._parent.log_message(
+                        '[DrumRack] scene-bank ownership RESTORED (chains=' + repr(chain_count) + ')')
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -904,21 +915,50 @@ class DrumRackModeComponent(ControlSurfaceComponent):
 
     def _bank_up_value(self, value):
         # Passthrough unless mode active AND chains > 8 AND press-down.
-        if not self._active or value == 0:
+        if value == 0:
             return
         chains = self._get_chains()
+        # Diagnostic so the next UAT can paste Log.txt and tell us whether
+        # the listener is firing AND what the actual chain count is. The
+        # round-1+2 "still not working" reports were ambiguous between
+        # "listener never fired" and "listener fired but chain count <= 8".
+        try:
+            self._parent.log_message(
+                '[DrumRack] bank_up press: active=' + repr(self._active) +
+                ' chains=' + repr(len(chains)) +
+                ' offset=' + repr(self._chain_offset) +
+                ' scene_nav_taken=' + repr(self._scene_nav_taken))
+        except Exception:
+            pass
+        if not self._active:
+            return
         if len(chains) <= NUM_STRIPS:
             return
         new_offset = max(self._chain_offset - NUM_STRIPS, 0)
         if new_offset != self._chain_offset:
             self._chain_offset = new_offset
             self._refresh_all_chain_bindings()
+            try:
+                self._parent.log_message(
+                    '[DrumRack] bank_up scrolled: new offset=' + repr(new_offset))
+            except Exception:
+                pass
 
     def _bank_down_value(self, value):
         # Passthrough unless mode active AND chains > 8 AND press-down.
-        if not self._active or value == 0:
+        if value == 0:
             return
         chains = self._get_chains()
+        try:
+            self._parent.log_message(
+                '[DrumRack] bank_down press: active=' + repr(self._active) +
+                ' chains=' + repr(len(chains)) +
+                ' offset=' + repr(self._chain_offset) +
+                ' scene_nav_taken=' + repr(self._scene_nav_taken))
+        except Exception:
+            pass
+        if not self._active:
+            return
         if len(chains) <= NUM_STRIPS:
             return
         max_offset = max(0, len(chains) - NUM_STRIPS)
@@ -926,6 +966,11 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         if new_offset != self._chain_offset:
             self._chain_offset = new_offset
             self._refresh_all_chain_bindings()
+            try:
+                self._parent.log_message(
+                    '[DrumRack] bank_down scrolled: new offset=' + repr(new_offset))
+            except Exception:
+                pass
 
     def _shift_value(self, value):
         # Observer-only: track the modifier state so _stop_all_value can
@@ -949,17 +994,17 @@ class DrumRackModeComponent(ControlSurfaceComponent):
     # ---------- Stop All Clips LED ---------------------------------------
 
     def _refresh_stop_all_led(self):
-        # Stop All Clips at MIDI note 81 is a plain _Framework.ButtonElement,
-        # which exposes turn_on() / turn_off(). It does NOT have
-        # set_on_off_values — guard accordingly. try/except is the project's
-        # fail-quiet idiom.
+        # Direct send_value(velocity, force=True) bypasses the
+        # _last_sent_value short-circuit inside _Framework.ButtonElement
+        # (turn_on/turn_off go through send_value with force=False, so the
+        # MIDI write gets dropped if the cached value already matches what
+        # we want — that was the round-1 LED-stays-dark cause). The same
+        # force=True idiom is used in MatrixModesComponent._refresh_variations_leds
+        # (line 440) for the same reason.
         if self._stop_all_button is None:
             return
         try:
-            if self._active:
-                self._stop_all_button.turn_on()
-            else:
-                self._stop_all_button.turn_off()
+            self._stop_all_button.send_value(127 if self._active else 0, True)
         except Exception:
             pass
 
