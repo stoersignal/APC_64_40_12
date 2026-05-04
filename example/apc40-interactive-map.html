@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akai APC40 - MLRvst Interactive Map</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #111827;
+            --apc-case: #1f2937;
+            --apc-border: #374151;
+            --pad-off: #374151;
+            --text-main: #f9fafb;
+            --text-dim: #9ca3af;
+            --glow-green: #10b981;
+            --glow-amber: #f59e0b;
+            --glow-red: #ef4444;
+            --glow-blue: #3b82f6;
+            --glow-cyan: #06b6d4;
+            --knob-bg: #111827;
+            --tooltip-bg: rgba(17, 24, 39, 0.95);
+            --tooltip-border: rgba(16, 185, 129, 0.5);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            margin: 0 0 0.5rem 0;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #10b981, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .mode-selectors {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .mode-group {
+            background: var(--apc-case);
+            padding: 0.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--apc-border);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .mode-btn {
+            background: var(--pad-off);
+            border: 1px solid rgba(0,0,0,0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .mode-btn:hover { filter: brightness(1.2); }
+        .mode-btn.active { background: var(--glow-blue); box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+
+        .device {
+            background: var(--apc-case);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--apc-border);
+            display: grid;
+            gap: 20px;
+            grid-template-columns: 2.5fr 1fr;
+            max-width: 1400px;
+            position: relative;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .status-display {
+            grid-column: span 2;
+            background: #000;
+            border: 2px solid #374151;
+            border-radius: 4px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-family: 'Courier New', monospace;
+            color: var(--glow-red);
+            text-shadow: 0 0 5px rgba(239, 68, 68, 0.7);
+            font-size: 0.85rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            box-shadow: inset 0 0 15px rgba(239, 68, 68, 0.1);
+            margin-bottom: 10px;
+        }
+
+        #lcd-shift { color: #333; transition: color 0.3s; }
+        #lcd-shift.active { color: var(--glow-red); text-shadow: 0 0 8px var(--glow-red); }
+
+        .left-panel { display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
+        .right-panel { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; }
+
+        .matrix {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr) 0.5fr;
+            gap: 10px;
+            background: #111827;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .matrix .btn {
+            aspect-ratio: 1.2;
+        }
+
+        .track-buttons {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr) 0.5fr;
+            gap: 10px;
+            background: #111827;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .faders-section {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr) 0.5fr;
+            gap: 10px;
+            background: #111827;
+            padding: 20px;
+            border-radius: 8px;
+            height: 250px;
+            margin-top: auto;
+        }
+
+        .knob-section {
+            background: #111827;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .knob-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .mode-btn-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .transport-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .btn {
+            background: var(--pad-off);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 0.65rem;
+            font-weight: bold;
+            color: white;
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.1), inset 0 -2px 4px rgba(0,0,0,0.3);
+            cursor: pointer;
+            padding: 4px;
+            border: 1px solid rgba(0,0,0,0.5);
+            transition: all 0.2s;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        .btn.rect-h { height: 40px; }
+        .btn.rect-v { width: 100%; height: 60px; }
+        .btn.square { aspect-ratio: 1; width: 100%; }
+        .btn.scene { border-radius: 12px; } /* Rounded for scene launch */
+        .btn.transport { height: 40px; font-size: 0.7rem; }
+        
+        .fader { background: #000; border-radius: 4px; position: relative; width: 60%; margin: 0 auto; height: 100%; }
+        .fader-cap { background: #4b5563; width: 140%; height: 20px; position: absolute; bottom: 20%; left: -20%; border-radius: 3px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        
+        .knob-container { display: flex; flex-direction: column; alignItems: center; gap: 5px; }
+        .knob {
+            background: var(--knob-bg);
+            border: 3px solid #374151;
+            border-radius: 50%;
+            aspect-ratio: 1;
+            width: 100%;
+            position: relative;
+            box-sizing: border-box;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.8), 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .knob::after {
+            content: ''; position: absolute; top: 10%; left: 50%; width: 2px; height: 30%; background: white; transform: translateX(-50%);
+        }
+
+        /* Colors */
+        .color-green { background: var(--glow-green) !important; color: black; box-shadow: 0 0 10px rgba(16,185,129,0.5); }
+        .color-amber { background: var(--glow-amber) !important; color: black; box-shadow: 0 0 10px rgba(245,158,11,0.5); }
+        .color-red { background: var(--glow-red) !important; color: white; box-shadow: 0 0 10px rgba(239,68,68,0.5); }
+        .color-blue { background: var(--glow-blue) !important; color: white; box-shadow: 0 0 10px rgba(59,130,246,0.5); }
+        .color-cyan { background: var(--glow-cyan) !important; color: black; box-shadow: 0 0 10px rgba(6,182,212,0.5); }
+
+        .legend {
+            margin-top: 2rem;
+            max-width: 800px;
+            background: var(--apc-case);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--apc-border);
+            text-align: center;
+        }
+
+        .legend h2 { margin-top: 0; color: var(--glow-green); font-size: 1.2rem; }
+
+        /* Tooltip */
+        #tooltip {
+            position: fixed;
+            background: var(--tooltip-bg);
+            color: var(--text-main);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--tooltip-border);
+            max-width: 300px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.7);
+            z-index: 1000;
+            backdrop-filter: blur(8px);
+        }
+
+        #tooltip.visible { opacity: 1; transform: translateY(0); }
+        #tooltip strong { display: block; color: var(--glow-green); margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.25rem; font-size: 0.95rem; }
+        #tooltip .related { margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-dim); border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.5rem; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>APC40 Custom Script Explorer</h1>
+        <p>Interactive layout map for the advanced APC_64_40 script. Hover over controls to learn more.</p>
+    </header>
+
+    <div style="text-align: center; margin-bottom: 2rem; color: var(--glow-amber); font-weight: bold;">
+        <p>💡 Click <span style="color:var(--glow-red); background: rgba(239,68,68,0.2); padding: 2px 6px; border-radius: 4px;">SHIFT</span> on the layout, then click the target button to change modes!</p>
+    </div>
+
+    <div class="device" id="device">
+        <div class="status-display">
+            <div id="lcd-mode">MODE: STANDARD</div>
+            <div id="lcd-shift">SHIFT</div>
+        </div>
+        <!-- Left Panel: Matrix, Track Buttons, Faders -->
+        <div class="left-panel">
+            <div class="matrix" id="matrix" style="flex-grow: 1; align-content: stretch;"></div>
+            
+            <div style="background: #111827; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+                <div class="track-buttons" id="track-buttons"></div>
+                <div class="faders-section" id="faders"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel">
+            
+            <!-- Track Controls -->
+            <div class="knob-section" id="track-controls">
+                <div style="text-align: center; font-size: 0.75rem; font-weight: bold; color: #9ca3af; margin-bottom: 5px;">TRACK CONTROL</div>
+                <div class="knob-row" id="tc-knobs-top"></div>
+                <div class="knob-row" id="tc-knobs-bottom"></div>
+                <div class="mode-btn-row" id="tc-buttons"></div>
+            </div>
+
+            <!-- Mid Section (Shift, Bank, Nudge) -->
+            <div class="knob-section" style="display: flex; justify-content: space-between; align-items: center; padding: 5px 10px;">
+                <div class="btn transport color-red" id="btn-shift" style="width: 50px; height: 35px; font-weight: 900; font-size: 0.7rem;">SHIFT</div>
+                
+                <div style="display: grid; grid-template-areas: '. up .' 'left down right'; gap: 3px;">
+                    <div class="btn transport" style="grid-area: up; padding: 2px;">^</div>
+                    <div class="btn transport" style="grid-area: left; padding: 2px;">&lt;</div>
+                    <div class="btn transport" style="grid-area: down; padding: 2px;">v</div>
+                    <div class="btn transport" style="grid-area: right; padding: 2px;">&gt;</div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 3px;">
+                    <div class="btn transport" id="btn-tap" style="padding: 3px; font-size: 0.6rem;">Tap Tempo<br><span style="font-size:0.5rem; opacity:0.7;">(Launch Var)</span></div>
+                    <div style="display: flex; gap: 3px;">
+                        <div class="btn transport" id="btn-nudge-minus" style="padding: 3px; font-size: 0.6rem;">Nudge-<br><span style="font-size:0.5rem; opacity:0.7;">(Prev Var)</span></div>
+                        <div class="btn transport" id="btn-nudge-plus" style="padding: 3px; font-size: 0.6rem;">Nudge+<br><span style="font-size:0.5rem; opacity:0.7;">(Next Var)</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Device Controls -->
+            <div class="knob-section" id="device-controls">
+                <div style="text-align: center; font-size: 0.75rem; font-weight: bold; color: #9ca3af; margin-bottom: 5px;">DEVICE CONTROL</div>
+                <div class="knob-row" id="dc-knobs-top"></div>
+                <div class="knob-row" id="dc-knobs-bottom"></div>
+                <div class="mode-btn-row" id="dc-buttons"></div>
+            </div>
+
+            <!-- Transport & Utilities -->
+            <div class="knob-section" id="transport-section" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Utilities -->
+                <div class="transport-grid">
+                    <div class="btn transport">Detail View</div>
+                    <div class="btn transport">Rec Quant</div>
+                    <div class="btn transport" id="btn-overdub" style="font-size: 0.55rem; line-height: 1.1;">MIDI Ovrd<br><span style="font-size:0.5rem; opacity:0.7;">(Overdub)</span></div>
+                    <div class="btn transport">Metronome</div>
+                </div>
+                
+                <!-- Main Transport -->
+                <div style="display: flex; gap: 8px;">
+                    <div class="btn transport" id="btn-play" style="flex: 1; height: 40px; background: var(--glow-green); color: black;">Play</div>
+                    <div class="btn transport" id="btn-stop" style="flex: 1; height: 40px;">Stop</div>
+                    <div class="btn transport" id="btn-rec" style="flex: 1; height: 40px; background: var(--glow-red);">Rec</div>
+                </div>
+                
+                <!-- Crossfader -->
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 5px;">
+                    <div style="width: 100%; height: 8px; background: #000; border-radius: 4px; position: relative; box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);">
+                        <div style="position: absolute; left: 50%; top: -5px; width: 15px; height: 18px; background: #4b5563; border-radius: 3px; transform: translateX(-50%); box-shadow: 0 2px 5px rgba(0,0,0,0.5);"></div>
+                    </div>
+                    <div style="font-size:0.6rem; color:#9ca3af; font-weight: bold; letter-spacing: 1px;">CROSSFADER</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="legend" id="legend">
+        <h2 id="legend-title">Standard Mode</h2>
+        <p id="legend-desc">The default Ableton Live layout for Clip Launching.</p>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script>
+        const tooltip = document.getElementById('tooltip');
+        let tooltipTimeout;
+
+        function showTooltip(e, content) {
+            clearTimeout(tooltipTimeout);
+            tooltipTimeout = setTimeout(() => {
+                tooltip.innerHTML = content;
+                tooltip.classList.add('visible');
+                
+                let tx = e.clientX + 15;
+                let ty = e.clientY + 15;
+                if (tx + tooltip.offsetWidth > window.innerWidth) tx = e.clientX - tooltip.offsetWidth - 15;
+                if (ty + tooltip.offsetHeight > window.innerHeight) ty = e.clientY - tooltip.offsetHeight - 15;
+                tooltip.style.left = `${tx}px`;
+                tooltip.style.top = `${ty}px`;
+            }, 100);
+        }
+
+        function hideTooltip() {
+            clearTimeout(tooltipTimeout);
+            tooltip.classList.remove('visible');
+        }
+
+        function addTip(el, contentFn) {
+            el.addEventListener('mouseenter', (e) => { const c = contentFn(); if(c) showTooltip(e, c); });
+            el.addEventListener('mousemove', (e) => {
+                if (tooltip.classList.contains('visible')) {
+                    let tx = e.clientX + 15;
+                    let ty = e.clientY + 15;
+                    if (tx + tooltip.offsetWidth > window.innerWidth) tx = e.clientX - tooltip.offsetWidth - 15;
+                    if (ty + tooltip.offsetHeight > window.innerHeight) ty = e.clientY - tooltip.offsetHeight - 15;
+                    tooltip.style.left = `${tx}px`;
+                    tooltip.style.top = `${ty}px`;
+                }
+            });
+            el.addEventListener('mouseleave', hideTooltip);
+        }
+
+        // Layout Definitions
+        const modes = {
+            'Standard': {
+                title: 'Standard (Clip Launch) Mode',
+                desc: 'Default 8x5 grid for launching clips. Shift modifiers exist on almost all track buttons.',
+                matrix: (r, c) => c < 8 ? `Clip<br>Trk ${c+1}` : `Scene<br>${r+1}`,
+                matrixClass: (r, c) => c < 8 ? (r%2===0?'color-amber':'color-green') : 'btn scene',
+                matrixTip: (r, c) => c < 8 ? `<strong>Clip Slot ${r+1}, Track ${c+1}</strong>Standard clip launch.` : `<strong>Scene Launch ${r+1}</strong>Launches scene. <div class="related"><em>Shift:</em> Quantization/Zoom in Sequencer Mode.</div>`,
+                
+                tBtn: (row, c) => {
+                    if (c === 8) {
+                        if (row === 0) return 'Stop All';
+                        if (row === 1) return 'Master<br><span style="font-size:0.5rem;opacity:0.7;">(Step Seq)</span>';
+                        return '';
+                    }
+                    const labels = ['Stop', 'Trk Sel', 'Activ', 'Solo', 'Arm'];
+                    let l = `${labels[row]}<br>${c+1}`;
+                    if (row === 1) {
+                        if (c === 0) l += '<br><span style="font-size:0.5rem;opacity:0.8;color:var(--glow-green);">(Standard)</span>';
+                        if (c === 2) l += '<br><span style="font-size:0.5rem;opacity:0.8;color:var(--glow-amber);">(Note Mode)</span>';
+                    }
+                    if (row === 4) {
+                        if (c === 1) l += '<br><span style="font-size:0.5rem;opacity:0.8;color:var(--glow-cyan);">(Fader Pan)</span>';
+                        if (c === 2) l += '<br><span style="font-size:0.5rem;opacity:0.8;color:var(--glow-amber);">(Send A)</span>';
+                    }
+                    return l;
+                },
+                tBtnTip: (row, c) => {
+                    if (c === 8) return row === 0 ? '<strong>Stop All Clips</strong>' : (row === 1 ? '<strong>Master Track Select</strong><div class="related"><em>Shift:</em> Toggle Step Sequencer.</div>' : '');
+                    const tips = [
+                        `<strong>Clip Stop ${c+1}</strong>`,
+                        `<strong>Track Select ${c+1}</strong><div class="related"><em>Shift:</em> Change Matrix Mode.</div>`,
+                        `<strong>Activator ${c+1}</strong><div class="related"><em>Shift:</em> None.</div>`,
+                        `<strong>Solo / Cue ${c+1}</strong>Short tap = Toggle. Long hold (>400ms) = Momentary.`,
+                        `<strong>Record Arm ${c+1}</strong><div class="related"><em>Shift:</em> Change Fader Mode.</div>`
+                    ];
+                    return tips[row];
+                },
+                fader: (c) => c < 8 ? `Vol ${c+1}` : `Master`,
+                faderTip: (c) => `<strong>Volume Fader</strong>Controls track volume.`,
+                
+                tcKnobs: (i) => `Pan ${i+1}`,
+                tcButtons: (i) => ['Pan','Send A','Send B','Send C'][i],
+                tcTip: (i) => `<strong>Track Control Knob ${i+1}</strong>Controls Pan/Sends depending on the selected Track Control Mode.<div class="related">Hold PAN button to temporarily toggle all knobs to Volume.</div>`,
+                tcBtnTip: (i) => `<strong>Track Control Mode Button</strong>Selects what the Track Encoders control. <div class="related"><em>Shift:</em> Access alternate TC Modes.</div>`,
+                
+                dcKnobs: (i) => `Device ${i+1}`,
+                dcButtons: (i) => ['Clip/Trk','Dev On/Off','Left','Right'][i],
+                dcTip: (i) => `<strong>Device Control Knob ${i+1}</strong>Maps to the 8 macro parameters of the currently selected device.`,
+                dcBtnTip: (i) => `<strong>Device Navigation Button</strong>`
+            },
+            'StepSequencer': {
+                title: 'Step Sequencer Mode',
+                desc: 'Shift+Master turns the grid into a Step Sequencer. Rows = Pitch, Cols = Time.',
+                matrix: (r, c) => c < 8 ? `Pitch ${5-r}<br>Stp ${c+1}` : `Quant<br>${['1/4','1/8','1/16','1/32','1/64'][r]}`,
+                matrixClass: (r, c) => c < 8 ? 'btn square' : 'btn scene color-blue',
+                matrixTip: (r, c) => c < 8 ? `<strong>Sequencer Step ${c+1}, Pitch ${5-r}</strong>Tap to insert/remove note. Velocity depends on Record Arm selection. <div class="related"><em>Shift:</em> Insert muted note.</div>` : `<strong>Zoom/Quantize: ${['1/4','1/8','1/16','1/32','1/64'][r]}</strong>Sets grid resolution and view width. <div class="related"><em>Shift:</em> Mute entire pitch lane.</div>`,
+                
+                tBtn: (row, c) => {
+                    if (c === 8) return row === 0 ? 'Stop All' : (row === 1 ? 'Follow' : '');
+                    const l = ['Unused', 'Bank Sel', 'Loop St', 'Loop Len', 'Veloc'];
+                    return `${l[row]}<br>${c+1}`;
+                },
+                tBtnTip: (row, c) => {
+                    if (c === 8) return row === 0 ? '<strong>Stop All Clips</strong>' : (row === 1 ? '<strong>Follow Mode Toggle</strong>Follows playback head across sequence banks.' : '');
+                    const tips = [
+                        `<strong>Unused</strong>`,
+                        `<strong>Select Bank ${c+1}</strong>Jumps sequence view to this bank of 8 steps. <div class="related">Hold Bank L/R to scroll time, Bank U/D to scroll pitch.</div>`,
+                        `<strong>Loop Start</strong>Sets loop start to Bank ${c+1} start position.`,
+                        `<strong>Loop Length</strong>Sets loop length in increments based on current Quantize zoom level.`,
+                        `<strong>Insert Velocity: ${15 + c*16}</strong>New notes will be inserted with this velocity.`
+                    ];
+                    return tips[row];
+                },
+                fader: (c) => c < 8 ? `Vol ${c+1}` : `Master`,
+                faderTip: (c) => `<strong>Volume Fader</strong>Controls track volume.`,
+                
+                tcKnobs: (i) => `Pan ${i+1}`,
+                tcButtons: (i) => ['Pan','Send A','Send B','Send C'][i],
+                tcTip: (i) => `Standard track control.`,
+                tcBtnTip: (i) => `Standard track modes.`,
+                
+                dcKnobs: (i) => `Device ${i+1}`,
+                dcButtons: (i) => ['Clip/Trk','Dev On/Off','Left','Right'][i],
+                dcTip: (i) => `Standard device control.`,
+                dcBtnTip: (i) => `Standard device nav.`
+            },
+            'NoteMode': {
+                title: 'Note Mode (Drum Rack)',
+                desc: 'Matrix Mode 3 (Shift + Track Select 3). Center 4x4 acts as Drum Rack pads.',
+                matrix: (r, c) => (r>=1 && r<=4 && c>=2 && c<=5) ? `Drum<br>${r},${c}` : `Note`,
+                matrixClass: (r, c) => (r>=1 && r<=4 && c>=2 && c<=5) ? 'btn square color-green' : 'btn square',
+                matrixTip: (r, c) => `<strong>MIDI Note Send (Ch 10)</strong>Sends static velocity 127 note to track.`,
+                tBtn: (row, c) => c===8 ? '' : ['Stop', 'Trk Sel', 'Activ', 'Solo', 'Arm'][row],
+                tBtnTip: (row, c) => `Standard track functions.`,
+                fader: (c) => c < 8 ? `Vol ${c+1}` : `Master`,
+                faderTip: (c) => `Standard volume.`,
+                
+                tcKnobs: (i) => `Pan ${i+1}`,
+                tcButtons: (i) => ['Pan','Send A','Send B','Send C'][i],
+                tcTip: (i) => `Standard pan.`,
+                tcBtnTip: (i) => `Standard track modes.`,
+                
+                dcKnobs: (i) => `Device ${i+1}`,
+                dcButtons: (i) => ['Clip/Trk','Dev On/Off','Left','Right'][i],
+                dcTip: (i) => `Standard device control.`,
+                dcBtnTip: (i) => `Standard device nav.`
+            },
+            'FaderPan': {
+                title: 'Fader Mode: Pan',
+                desc: 'Shift + Rec Arm 2 maps track faders to Pan controls.',
+                matrix: (r, c) => c < 8 ? `Clip` : `Scene`,
+                matrixClass: (r, c) => c < 8 ? 'btn square color-amber' : 'btn scene',
+                matrixTip: (r, c) => `Standard matrix.`,
+                tBtn: (row, c) => c===8 ? '' : ['Stop', 'Trk Sel', 'Activ', 'Solo', 'Arm'][row],
+                tBtnTip: (row, c) => `Standard track functions.`,
+                fader: (c) => c < 8 ? `Pan ${c+1}` : `Master`,
+                faderTip: (c) => `<strong>Pan Fader</strong>Controls left/right panning for Track ${c+1}.`,
+                
+                tcKnobs: (i) => `Unused`,
+                tcButtons: (i) => ['Pan','Send A','Send B','Send C'][i],
+                tcTip: (i) => `Currently unused because faders handle Pan.`,
+                tcBtnTip: (i) => `Standard track modes.`,
+                
+                dcKnobs: (i) => `Device ${i+1}`,
+                dcButtons: (i) => ['Clip/Trk','Dev On/Off','Left','Right'][i],
+                dcTip: (i) => `Standard device control.`,
+                dcBtnTip: (i) => `Standard device nav.`
+            },
+            'TCAltDevice': {
+                title: 'Track Control: Alternate Device',
+                desc: 'Shift + Send A. Track Control section becomes a secondary Device Control.',
+                matrix: (r, c) => c < 8 ? `Clip` : `Scene`,
+                matrixClass: (r, c) => c < 8 ? 'btn square color-amber' : 'btn scene',
+                matrixTip: (r, c) => `Standard matrix.`,
+                tBtn: (row, c) => c===8 ? '' : ['Stop', 'Trk Sel', 'Activ', 'Solo', 'Arm'][row],
+                tBtnTip: (row, c) => `Standard track functions.`,
+                fader: (c) => c < 8 ? `Vol ${c+1}` : `Master`,
+                faderTip: (c) => `Standard volume.`,
+                
+                tcKnobs: (i) => `Device<br>${i+1}`,
+                tcButtons: (i) => ['Lock/Ld','Dev On','Bank L','Bank R'][i],
+                tcTip: (i) => `<strong>Alt Device Control ${i+1}</strong>Maps to macros/parameters of selected device independently from main device knobs.`,
+                tcBtnTip: (i) => {
+                    const t = ['<strong>Device Lock/Load</strong>Locks knobs to current device.', '<strong>Device On/Off</strong>', '<strong>Device Bank Left</strong>', '<strong>Device Bank Right</strong>'];
+                    return t[i];
+                },
+                
+                dcKnobs: (i) => `Device ${i+1}`,
+                dcButtons: (i) => ['Clip/Trk','Dev On/Off','Left','Right'][i],
+                dcTip: (i) => `Standard device control.`,
+                dcBtnTip: (i) => `Standard device nav.`
+            },
+            'TCEQFilter': {
+                title: 'Track Control: EQ & Filter',
+                desc: 'Shift + Send B. Smart-maps Track Controls to Filters, EQs, and Sends simultaneously.',
+                matrix: (r, c) => c < 8 ? `Clip` : `Scene`,
+                matrixClass: (r, c) => c < 8 ? 'btn square color-amber' : 'btn scene',
+                matrixTip: (r, c) => `Standard matrix.`,
+                tBtn: (row, c) => c===8 ? '' : ['Stop', 'Trk Sel', 'Activ', 'Solo', 'Arm'][row],
+                tBtnTip: (row, c) => `Standard track functions.`,
+                fader: (c) => c < 8 ? `Vol ${c+1}` : `Master`,
+                faderTip: (c) => `Standard volume.`,
+                
+                tcKnobs: (i) => {
+                    const l = ['Filt Freq', 'Send A', 'Send B', 'Send C', 'Filt Res', 'EQ 1', 'EQ 2', 'EQ 3'];
+                    return l[i];
+                },
+                tcButtons: (i) => ['EQ Lock','EQ1 Cut','EQ2 Cut','EQ3 Cut'][i],
+                tcTip: (i) => `<strong>EQ / Filter Smart Control</strong>Automaps based on device chain (AutoFilter, EQ8, Sends).`,
+                tcBtnTip: (i) => {
+                    const t = ['<strong>EQ Lock/Load</strong>Locks to current track\'s EQ/Filter.', '<strong>EQ 1 Cut (Low)</strong>', '<strong>EQ 2 Cut (Mid)</strong>', '<strong>EQ 3 Cut (High)</strong>'];
+                    return t[i];
+                },
+                
+                dcKnobs: (i) => `Device ${i+1}`,
+                dcButtons: (i) => ['Clip/Trk','Dev On/Off','Left','Right'][i],
+                dcTip: (i) => `Standard device control.`,
+                dcBtnTip: (i) => `Standard device nav.`
+            }
+        };
+
+        const faderSends = { 
+            title: 'Fader Mode: Send A', 
+            desc: 'Shift + Rec Arm 3 maps track faders to Send A amount.', 
+            matrix: modes.FaderPan.matrix, matrixClass: modes.FaderPan.matrixClass, matrixTip: modes.FaderPan.matrixTip, 
+            tBtn: modes.FaderPan.tBtn, tBtnTip: modes.FaderPan.tBtnTip, 
+            tcKnobs: modes.FaderPan.tcKnobs, tcButtons: modes.FaderPan.tcButtons, tcTip: modes.FaderPan.tcTip, tcBtnTip: modes.FaderPan.tcBtnTip,
+            dcKnobs: modes.FaderPan.dcKnobs, dcButtons: modes.FaderPan.dcButtons, dcTip: modes.FaderPan.dcTip, dcBtnTip: modes.FaderPan.dcBtnTip,
+            fader: (c) => c < 8 ? `Snd A ${c+1}` : `Master`, 
+            faderTip: (c) => `<strong>Send A Fader</strong>Controls Send A amount for Track ${c+1}.` 
+        };
+        modes['FaderSend'] = faderSends;
+
+        const pan16Macros = {
+            title: '16 Macros (Pan Mode)',
+            desc: 'v1.1 Feature: Pressing the Pan button maps BOTH Track and Device encoders to a 16-parameter device macro control.',
+            matrix: modes.Standard.matrix, matrixClass: modes.Standard.matrixClass, matrixTip: modes.Standard.matrixTip,
+            tBtn: modes.Standard.tBtn, tBtnTip: modes.Standard.tBtnTip,
+            fader: modes.Standard.fader, faderTip: modes.Standard.faderTip,
+            
+            tcKnobs: (i) => `Macro ${i+1}`,
+            tcButtons: modes.Standard.tcButtons,
+            tcTip: (i) => `<strong>Device Macro ${i+1}</strong>Controls the first 8 macros of the selected device.`,
+            tcBtnTip: modes.Standard.tcBtnTip,
+            
+            dcKnobs: (i) => `Macro ${i+9}`,
+            dcButtons: modes.Standard.dcButtons,
+            dcTip: (i) => `<strong>Device Macro ${i+9}</strong>Controls macros 9-16 of the selected device.`,
+            dcBtnTip: modes.Standard.dcBtnTip
+        };
+        modes['Pan16Macros'] = pan16Macros;
+
+        function buildDevice() {
+            const mat = document.getElementById('matrix');
+            for(let r=0; r<5; r++) {
+                for(let c=0; c<9; c++) {
+                    const b = document.createElement('div');
+                    b.className = 'btn square';
+                    b.id = `mat-${r}-${c}`;
+                    mat.appendChild(b);
+                }
+            }
+
+            const tb = document.getElementById('track-buttons');
+            for(let r=0; r<5; r++) {
+                for(let c=0; c<9; c++) {
+                    const b = document.createElement('div');
+                    b.className = 'btn rect-h';
+                    b.id = `tb-${r}-${c}`;
+                    
+                    if (c === 8) {
+                        if (r === 2) {
+                            b.className = '';
+                            b.style.gridColumn = '9';
+                            b.style.gridRow = '3 / span 3';
+                            b.style.display = 'flex';
+                            b.style.flexDirection = 'column';
+                            b.style.alignItems = 'center';
+                            b.style.justifyContent = 'center';
+                            b.style.height = '100%';
+                            b.innerHTML = `<div class="knob" id="knob-cue" style="width: 35px; height: 35px; margin-bottom: 8px;"></div><div style="font-size:0.55rem; color:#9ca3af; text-align:center; font-weight:bold; line-height:1.2;">CUE LEVEL<br><span style="color:var(--glow-amber); opacity:0.8;">(TEMPO)</span></div>`;
+                        } else if (r === 3 || r === 4) {
+                            b.style.display = 'none';
+                        }
+                    }
+                    tb.appendChild(b);
+                }
+            }
+
+            const fd = document.getElementById('faders');
+            for(let c=0; c<9; c++) {
+                const f = document.createElement('div');
+                f.style.display = 'flex'; f.style.flexDirection = 'column'; f.style.alignItems = 'center'; f.style.gap = '5px';
+                f.innerHTML = `<div class="fader" id="fader-${c}"><div class="fader-cap"></div></div><div style="font-size:0.6rem; color:#9ca3af; text-align:center;" id="fader-lbl-${c}">Vol</div>`;
+                fd.appendChild(f);
+                addTip(f, () => window.currentModeData.faderTip(c));
+            }
+
+            const buildKnobs = (idPrefix, containerId, btnContainerId) => {
+                const top = document.getElementById(`${containerId}-top`);
+                const bot = document.getElementById(`${containerId}-bottom`);
+                for(let i=0; i<8; i++) {
+                    const k = document.createElement('div');
+                    k.className = 'knob-container';
+                    k.innerHTML = `<div class="knob"></div><div id="${idPrefix}-lbl-${i}" style="font-size:0.65rem; color:var(--text-main); text-align:center;">Knob</div>`;
+                    if(i<4) top.appendChild(k); else bot.appendChild(k);
+                    addTip(k, () => window.currentModeData[`${idPrefix}Tip`](i));
+                }
+                const btns = document.getElementById(btnContainerId);
+                for(let i=0; i<4; i++) {
+                    const b = document.createElement('div');
+                    b.className = 'btn rect-h';
+                    b.id = `${idPrefix}-btn-${i}`;
+                    btns.appendChild(b);
+                    addTip(b, () => window.currentModeData[`${idPrefix}BtnTip`](i));
+                }
+            }
+
+            buildKnobs('tc', 'tc-knobs', 'tc-buttons'); // Top right
+            buildKnobs('dc', 'dc-knobs', 'dc-buttons'); // Mid right
+
+            // Transport Tips
+            addTip(document.getElementById('btn-shift'), () => `<strong>SHIFT Modifier</strong>Hold to access secondary layer commands for almost every button.`);
+            addTip(document.getElementById('btn-nudge-minus'), () => `<strong>NUDGE - (Prev Variation)</strong>Selects the previous Macro Variation on the appointed device.<div class="related"><em>Shift:</em> Lock to current device.</div>`);
+            addTip(document.getElementById('btn-nudge-plus'), () => `<strong>NUDGE + (Next Variation)</strong>Selects the next Macro Variation on the appointed device.`);
+            addTip(document.getElementById('btn-tap'), () => `<strong>TAP TEMPO (Launch Variation)</strong>Recalls/Launches the currently selected Macro Variation.<div class="related"><em>Shift:</em> Tap to Save Variation. Hold to edit Ramp/Morph Time.</div>`);
+            
+            addTip(document.getElementById('btn-play'), () => `<strong>PLAY</strong>Starts transport playback.`);
+            addTip(document.getElementById('btn-stop'), () => `<strong>STOP</strong>Stops transport playback.`);
+            addTip(document.getElementById('btn-rec'), () => `<strong>RECORD</strong>Global arrange/session record toggle.`);
+            addTip(document.getElementById('btn-overdub'), () => `<strong>MIDI OVERDUB</strong>Toggles MIDI overdub on playing clips.`);
+            
+            addTip(document.getElementById('knob-cue'), () => `<strong>CUE LEVEL</strong>Adjusts headphone cue volume.<div class="related"><em>Shift:</em> Adjusts global Tempo.</div>`);
+        }
+
+        let currentMode = 'Standard';
+        let shiftActive = false;
+
+        function toggleShift() {
+            shiftActive = !shiftActive;
+            const shiftBtn = document.getElementById('btn-shift');
+            const lcdShift = document.getElementById('lcd-shift');
+            
+            if (shiftActive) {
+                lcdShift.classList.add('active');
+                shiftBtn.style.boxShadow = '0 0 20px rgba(239,68,68,1)';
+                shiftBtn.style.filter = 'brightness(1.5)';
+                shiftBtn.style.border = '2px solid white';
+                anime({
+                    targets: '#device',
+                    boxShadow: '0 0 40px rgba(239, 68, 68, 0.3)',
+                    duration: 400,
+                    easing: 'easeOutQuad'
+                });
+            } else {
+                lcdShift.classList.remove('active');
+                shiftBtn.style.boxShadow = '';
+                shiftBtn.style.filter = '';
+                shiftBtn.style.border = '';
+                anime({
+                    targets: '#device',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                    duration: 400,
+                    easing: 'easeOutQuad'
+                });
+            }
+        }
+
+        function setMode(modeKey) {
+            if (currentMode === modeKey && modeKey !== 'Standard') {
+                modeKey = 'Standard'; // Toggle back to Standard
+            }
+            currentMode = modeKey;
+
+            const md = modes[modeKey];
+            window.currentModeData = md;
+            
+            document.getElementById('legend-title').innerText = md.title;
+            document.getElementById('legend-desc').innerText = md.desc;
+            document.getElementById('lcd-mode').innerText = `MODE: ${md.title.toUpperCase()}`;
+
+            // Staggered animation for grid entry
+            anime({
+                targets: '.matrix .btn, .track-buttons .btn',
+                scale: [0.95, 1],
+                opacity: [0.7, 1],
+                delay: anime.stagger(15, {grid: [9, 10], from: 'center'}),
+                duration: 600,
+                easing: 'easeOutElastic(1, .8)'
+            });
+            
+            // update matrix and buttons visually
+            for(let r=0; r<5; r++) {
+                for(let c=0; c<9; c++) {
+                    const matBtn = document.getElementById(`mat-${r}-${c}`);
+                    matBtn.className = md.matrixClass(r, c);
+                    matBtn.innerHTML = md.matrix(r, c);
+                    
+                    const tbBtn = document.getElementById(`tb-${r}-${c}`);
+                    if (!(c === 8 && r >= 2)) {
+                        tbBtn.innerHTML = md.tBtn(r, c);
+                    }
+                    
+                    // add active highlights for mode buttons
+                    if (tbBtn) { tbBtn.style.boxShadow = ''; tbBtn.style.border = ''; }
+                    tbBtn.onmouseenter = null; tbBtn.onmouseleave = null; tbBtn.onmousemove = null;
+                    if (!(c === 8 && r >= 2)) {
+                        addTip(tbBtn, () => md.tBtnTip(r, c));
+                    }
+                }
+            }
+
+            for(let c=0; c<9; c++) {
+                document.getElementById(`fader-lbl-${c}`).innerHTML = md.fader(c);
+            }
+
+            for(let i=0; i<8; i++) {
+                document.getElementById(`dc-lbl-${i}`).innerHTML = md.dcKnobs(i);
+                document.getElementById(`tc-lbl-${i}`).innerHTML = md.tcKnobs(i);
+            }
+            // Clear all highlights
+            document.querySelectorAll('.btn').forEach(b => {
+                b.style.boxShadow = '';
+                b.style.border = '';
+            });
+            
+            if (shiftActive) {
+                const shiftBtn = document.getElementById('btn-shift');
+                shiftBtn.style.boxShadow = '0 0 20px rgba(239,68,68,1)';
+                shiftBtn.style.border = '2px solid white';
+            }
+
+            for(let i=0; i<4; i++) {
+                const dcBtn = document.getElementById(`dc-btn-${i}`);
+                const tcBtn = document.getElementById(`tc-btn-${i}`);
+                dcBtn.innerHTML = md.dcButtons(i);
+                tcBtn.innerHTML = md.tcButtons(i);
+                
+                if (modeKey === 'Pan16Macros' && i === 0) { tcBtn.style.boxShadow = '0 0 15px rgba(255,255,255,0.8)'; tcBtn.style.border = '2px solid white'; }
+                if (modeKey === 'TCAltDevice' && i === 1) { tcBtn.style.boxShadow = '0 0 15px rgba(255,255,255,0.8)'; tcBtn.style.border = '2px solid white'; }
+                if (modeKey === 'TCEQFilter' && i === 2) { tcBtn.style.boxShadow = '0 0 15px rgba(255,255,255,0.8)'; tcBtn.style.border = '2px solid white'; }
+            }
+
+            if (modeKey === 'StepSequencer') { document.getElementById('tb-1-8').style.boxShadow = '0 0 15px rgba(255,255,255,0.8)'; document.getElementById('tb-1-8').style.border = '2px solid white'; }
+            if (modeKey === 'NoteMode') { document.getElementById('tb-1-2').style.boxShadow = '0 0 15px rgba(255,255,255,0.8)'; document.getElementById('tb-1-2').style.border = '2px solid white'; }
+            if (modeKey === 'FaderPan') { document.getElementById('tb-4-1').style.boxShadow = '0 0 15px rgba(255,255,255,0.8)'; document.getElementById('tb-4-1').style.border = '2px solid white'; }
+            if (modeKey === 'FaderSend') { document.getElementById('tb-4-2').style.boxShadow = '0 0 15px rgba(255,255,255,0.8)'; document.getElementById('tb-4-2').style.border = '2px solid white'; }
+        }
+
+        function setupInteractions() {
+            document.getElementById('btn-shift').addEventListener('click', toggleShift);
+            
+            document.getElementById('tc-btn-0').addEventListener('click', () => {
+                setMode('Pan16Macros');
+                if(shiftActive) toggleShift();
+            });
+
+            document.getElementById('tc-btn-1').addEventListener('click', () => {
+                if (shiftActive) { setMode('TCAltDevice'); toggleShift(); }
+            });
+
+            document.getElementById('tc-btn-2').addEventListener('click', () => {
+                if (shiftActive) { setMode('TCEQFilter'); toggleShift(); }
+            });
+
+            document.getElementById('tb-1-8').addEventListener('click', () => {
+                if (shiftActive) { setMode('StepSequencer'); toggleShift(); }
+            });
+
+            document.getElementById('tb-1-2').addEventListener('click', () => {
+                if (shiftActive) { setMode('NoteMode'); toggleShift(); }
+            });
+
+            document.getElementById('tb-4-1').addEventListener('click', () => {
+                if (shiftActive) { setMode('FaderPan'); toggleShift(); }
+            });
+
+            document.getElementById('tb-4-2').addEventListener('click', () => {
+                if (shiftActive) { setMode('FaderSend'); toggleShift(); }
+            });
+            
+            // Reset to Standard Mode when clicking any other Track Select button with Shift
+            document.getElementById('tb-1-0').addEventListener('click', () => {
+                if (shiftActive) { setMode('Standard'); toggleShift(); }
+            });
+        }
+
+        buildDevice();
+        setupInteractions();
+        setMode('Standard');
+    </script>
+</body>
+</html>
