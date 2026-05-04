@@ -457,12 +457,14 @@ class SpecialTrackEQComponent(TrackEQComponent): #added to override _cut_value
                     if (len(cut_names) > index):
                         parameter = get_parameter_by_name(self._device, cut_names[index])
                         if (parameter != None):
-                            if self._device.class_name == 'FilterEQ3':
-                                if (parameter.value == 0.0):
-                                    self._cut_buttons[index].turn_on()
-                            else:
-                                if (parameter.value > 0.0):
-                                    self._cut_buttons[index].turn_on()
+                            # LED on = band ON (parameter.value > 0). Same convention
+                            # for every device — Eq8, FilterEQ3, AudioEffectGroupDevice.
+                            # The original code inverted the rule for FilterEQ3 ("LED on
+                            # means kill engaged"), which conflicted with Eq8 / AEG
+                            # ("LED on means band passing") — UAT 2026-05-04 reported
+                            # the inversion as a bug.
+                            if (parameter.value > 0.0):
+                                self._cut_buttons[index].turn_on()
                             if (not parameter.value_has_listener(self._on_cut_changed)):
                                 parameter.add_value_listener(self._on_cut_changed)
 
@@ -488,12 +490,10 @@ class SpecialTrackEQComponent(TrackEQComponent): #added to override _cut_value
                 if (len(cut_names) > index):
                     parameter = get_parameter_by_name(self._device, cut_names[index])
                     if (parameter != None):
-                        if self._device.class_name == 'FilterEQ3':
-                            if (parameter.value == 0.0):
-                                self._cut_buttons[index].turn_on()
-                        else:
-                            if (parameter.value > 0.0):
-                                self._cut_buttons[index].turn_on()
+                        # Standard convention across all devices: LED on = band ON.
+                        # Symmetric with the same rule in update() above.
+                        if (parameter.value > 0.0):
+                            self._cut_buttons[index].turn_on()
 
     def _on_devices_changed(self):
         if (self._device != None):
