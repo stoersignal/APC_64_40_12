@@ -48,12 +48,12 @@ EQ_DEVICES = {'Eq8': {'Gains': [ ('%i Gain A' % (index + 1)) for index in range(
 
 # Channel EQ extras — controls that don't fit the gain/cut shape:
 #   - Encoder 0 ("very first encoder in the first row")    → Mid Freq (the user's "split frequency")
-#   - Encoder 4 ("encoder to the left" of the band knobs)  → Output Gain
+#   - Encoder 4 ("encoder to the left" of the band knobs)  → Output (output trim)
 #   - Pan button (buttons[0], directly below encoder 4)    → Highpass on/off (replaces the lock button while ChannelEq is active)
-# Names are best-effort across Live builds; on first detection EncoderEQComponent dumps the actual
-# parameter names to Log.txt under '[ChannelEq]' so they can be verified after one UAT activation.
+# Parameter names verified via Log.txt dump on UAT 2026-05-04 — the output trim
+# is named 'Output' (not 'Output Gain' as initially guessed).
 CHANNEL_EQ_EXTRAS = {
-    'Output': 'Output Gain',
+    'Output': 'Output',
     'MidFreq': 'Mid Freq',
     'HighpassOn': 'Highpass On',
 }
@@ -573,7 +573,6 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._track_filter = SpecialTrackFilterComponent(parent)
         # Channel EQ (Live 11+) state — extras that don't fit the gain/cut shape.
         self._channel_eq_device = None
-        self._channel_eq_logged = False
         self._highpass_button = None
         self._highpass_parameter = None
         self._highpass_listener_attached = False
@@ -662,14 +661,6 @@ class EncoderEQComponent(ControlSurfaceComponent):
         return None
 
     def _setup_channel_eq_extras(self, channel_eq):
-        if not self._channel_eq_logged:
-            self._channel_eq_logged = True
-            try:
-                self._parent.log_message('[ChannelEq] params on detected device:')
-                for p in channel_eq.parameters:
-                    self._parent.log_message('[ChannelEq]   ' + repr(p.name))
-            except Exception as e:
-                self._parent.log_message('[ChannelEq] params introspection failed: ' + str(e))
         try:
             self._param_controls[0].release_parameter()
         except Exception:
