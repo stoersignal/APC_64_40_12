@@ -994,19 +994,32 @@ class DrumRackModeComponent(ControlSurfaceComponent):
     # ---------- Stop All Clips LED ---------------------------------------
 
     def _refresh_stop_all_led(self):
-        # Direct send_value(velocity, force=True) bypasses the
-        # _last_sent_value short-circuit inside _Framework.ButtonElement
-        # (turn_on/turn_off go through send_value with force=False, so the
-        # MIDI write gets dropped if the cached value already matches what
-        # we want — that was the round-1 LED-stays-dark cause). The same
-        # force=True idiom is used in MatrixModesComponent._refresh_variations_leds
-        # (line 440) for the same reason.
+        # Round-2 fix used send_value(127, True) — still dark per UAT round 3.
+        # Two remaining theories:
+        #   (T1) APC40 Stop All Clips LED expects velocity 1 (single-color
+        #        LED protocol) rather than 127.
+        #   (T2) Something else periodically repaints the button after we
+        #        write — initial paint lights briefly, then gets cleared.
+        # Address both: send velocity 1, log every paint to Log.txt with a
+        # marker the user can grep for, and rely on _on_timer to re-paint
+        # so a periodic overwrite can't keep us dark.
         if self._stop_all_button is None:
             return
+        velocity = 1 if self._active else 0
         try:
-            self._stop_all_button.send_value(127 if self._active else 0, True)
+            self._parent.log_message(
+                '[DrumRack] _refresh_stop_all_led active=' + repr(self._active) +
+                ' sending velocity=' + repr(velocity))
         except Exception:
             pass
+        try:
+            self._stop_all_button.send_value(velocity, True)
+        except Exception as exc:
+            try:
+                self._parent.log_message(
+                    '[DrumRack] _refresh_stop_all_led send_value RAISED: ' + str(exc))
+            except Exception:
+                pass
 
     # ---------- One-shot diagnostic dump ---------------------------------
 
@@ -1074,6 +1087,21 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         try:
             for h in self._slot_handlers:
                 h.tick()
+        except Exception:
+            pass
+        # Periodic LED re-assertion — defeats T2 (some other component's
+        # update() repaints the Stop All Clips LED after our initial write).
+        # We tick at v1.0 cadence (every Live MIDI loop iteration), so the
+        # LED will be re-asserted within one tick of any overwrite. Cost:
+        # one MIDI byte per tick per active mode = negligible.
+        self._refresh_stop_all_led_silent()
+
+    def _refresh_stop_all_led_silent(self):
+        """Like _refresh_stop_all_led but no log_message (called every tick)."""
+        if self._stop_all_button is None:
+            return
+        try:
+            self._stop_all_button.send_value(1 if self._active else 0, True)
         except Exception:
             pass
 
