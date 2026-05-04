@@ -658,6 +658,8 @@ class EncoderEQComponent(ControlSurfaceComponent):
         #   anything   → encoders 0/4 = AutoFilter, Pan = lock (default)
         # Tear down ALL conditional bindings before deciding which to set up,
         # so switching tracks between device classes leaves no stale listener.
+        eq_device = getattr(self._track_eq, '_device', None)
+        eq_class = getattr(eq_device, 'class_name', None) if eq_device is not None else None
         channel_eq = self._detect_channel_eq()
         if channel_eq is not None:
             self._track_filter.set_track(None)
@@ -670,8 +672,6 @@ class EncoderEQComponent(ControlSurfaceComponent):
         else:
             self._teardown_channel_eq_extras()
             self._channel_eq_device = None
-            eq_device = getattr(self._track_eq, '_device', None)
-            eq_class = getattr(eq_device, 'class_name', None) if eq_device is not None else None
             if eq_class == 'Eq8':
                 # Eq8 takes encoders 0..4. Disable AutoFilter so it doesn't fight for 0/4.
                 self._track_filter.set_track(None)
@@ -703,9 +703,16 @@ class EncoderEQComponent(ControlSurfaceComponent):
         if self._is_locked != True:
             self._strip = self._mixer._selected_strip
         if self._strip is not None:
-            self._strip.set_send_controls(tuple([
-                self._param_controls[1], self._param_controls[2], self._param_controls[3]
-            ]))
+            # On Eq8 the top-row encoders (1/2/3) drive band frequencies — must
+            # NOT be re-bound to Send A/B/C, which would steal them right after
+            # _setup_eq8_extras connects them. Pass None for sends so the strip
+            # doesn't fight for the encoders. Other modes keep sends on 1/2/3.
+            if eq_class == 'Eq8':
+                self._strip.set_send_controls(None)
+            else:
+                self._strip.set_send_controls(tuple([
+                    self._param_controls[1], self._param_controls[2], self._param_controls[3]
+                ]))
 
 
     # --- Channel EQ helpers (Live 11+) -----------------------------------
