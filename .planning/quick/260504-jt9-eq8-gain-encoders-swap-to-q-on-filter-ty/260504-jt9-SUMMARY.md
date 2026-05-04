@@ -4,11 +4,11 @@ description: Eq8 gain encoders swap to Q on filter types without gain (LP/HP/Not
 date: 2026-05-04
 status: complete
 uat_passed: 2026-05-04
-final_commit: <pending>
+final_commit: 54104dc
 commits:
   - 1eff437 feat — gain↔Q swap based on parameter.is_enabled (didn't fire — Live keeps gain enabled even on no-gain types)
   - 67fa36d fix — switch to filter-type VALUE (0/1/4/6/7 = no-gain types); per-call diagnostic line for one-shot verification
-  - <pending> docs/cleanup — remove diagnostics (filter-type values verified), mark UAT-passed
+  - 54104dc docs/cleanup — remove diagnostics (filter-type values verified), mark UAT-passed
 ---
 
 # Quick Task 260504-jt9 — Eq8 gain ↔ Q swap
