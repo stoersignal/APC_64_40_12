@@ -29,7 +29,7 @@ Milestone: v1.2 Documentation — **ready to execute** (planned 2026-05-02)
 Phase: 6 (create-user-manual) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 6
-Last activity: 2026-05-02 -- Phase 6 execution started
+Last activity: 2026-05-04 -- Completed quick task 260504-5j0: replace "MATRIX MODE 8 – USER/NOTE MODE 6" with a new "Variations MODE"
 
 Progress: [░░░░░░░░░░] 0% of v1.2
 
@@ -101,6 +101,12 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 4]: Verify two DeviceComponent instances targeting same appointed device do not conflict via `_device_bank_registry` — empirical check required early in Phase 4 before wiring controls (confidence: MEDIUM per research)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260504-5j0 | replace "MATRIX MODE 8 – USER/NOTE MODE 6" with a new "Variations MODE" | 2026-05-04 | _pending_ | [260504-5j0-replace-matrix-mode-8-user-note-mode-6-w](./quick/260504-5j0-replace-matrix-mode-8-user-note-mode-6-w/) |
 
 ## Session Continuity
 
