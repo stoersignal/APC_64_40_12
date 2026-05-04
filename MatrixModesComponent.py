@@ -397,9 +397,12 @@ class MatrixModesComponent(ModeSelectorComponent):
                 device.recall_selected_variation()
         except Exception:
             return
-        # No explicit refresh — the selected_variation_index listener
-        # (and the variation_count listener for store-side updates) will
-        # repaint via _variations_on_selected_index_changed.
+        # Explicit repaint — the selected_variation_index listener also fires,
+        # but Live does not guarantee it has propagated by the time we return,
+        # and a stuck-green pad (UAT 2026-05-04) showed the listener alone is
+        # not enough. Belt + listener: the second paint inside the listener is
+        # cheap (~48 LED writes).
+        self._refresh_variations_leds()
 
 
 # local variables:
