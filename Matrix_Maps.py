@@ -130,29 +130,6 @@ NOTEMAP_4 = ((56, 57, 58, 59, 80, 81, 82, 83), #Row 1
              (36, 37, 38, 39, 60, 61, 62, 63), #Clip Stop Row
              )
 
-#---------- Page 7 is User Mode 5
-
-USE_STOP_ROW_5 = True
-IS_NOTE_MODE_5 = True
-
-PATTERN_5 = ((1, 5, 3, 1, 5, 3, 1, 5), #Row 1
-             (1, 5, 3, 1, 5, 3, 1, 5), #Row 2
-             (1, 5, 3, 1, 5, 3, 1, 5), #Row 3
-             (1, 5, 3, 1, 5, 3, 1, 5), #Row 4
-             (1, 5, 3, 1, 5, 3, 1, 5), #Row 5
-             (1, 1, 1, 1, 1, 1, 1, 5), #Clip Stop Row
-             ) #0=off, 1=green, 2=green blink, 3=red, 4=red blink, 5=yellow, 6=yellow blink, 7-127=green
-
-CHANNEL_5 = 13
-
-NOTEMAP_5 = ((41, 47, 53, 59, 65, 71, 77, 83), #Row 1
-             (40, 46, 52, 58, 64, 70, 76, 82), #Row 2
-             (39, 45, 51, 57, 63, 69, 75, 81), #Row 3
-             (38, 44, 50, 56, 62, 68, 74, 80), #Row 4
-             (37, 43, 49, 55, 61, 67, 73, 79), #Row 5
-             (36, 42, 48, 54, 60, 66, 72, 78), #Clip Stop Row
-             )
-
 #---------- Pad Translations for Drum Rack
 
 # The PAD_TRANSLATIONS array represents a 4 x 4 Drum Rack

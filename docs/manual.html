@@ -473,7 +473,7 @@
         <div class="mode-strip-btn matrix-mode-btn" data-mode="NoteMode2">NoteMode2</div>
         <div class="mode-strip-btn matrix-mode-btn" data-mode="NoteMode3">NoteMode3</div>
         <div class="mode-strip-btn matrix-mode-btn" data-mode="NoteMode4">NoteMode4</div>
-        <div class="mode-strip-btn matrix-mode-btn" data-mode="NoteMode5">NoteMode5</div>
+        <div class="mode-strip-btn matrix-mode-btn" data-mode="GlobalVariations">GlobalVariations</div>
         <div class="mode-strip-btn matrix-mode-btn" data-mode="Variations">Variations</div>
         <div class="mode-strip-btn matrix-mode-btn" data-mode="StepSequencer">StepSequencer</div>
     </div>
@@ -1203,7 +1203,7 @@
         // PATTERN_N / CHANNEL_N / NOTEMAP_N / USE_STOP_ROW_N / IS_NOTE_MODE_N.
         //
         // matrixModeDefinitions: per-mode repaint info + tooltip getters,
-        // 9 keys total: ClipLaunch, SessionOverview, NoteMode1-5, Variations, StepSequencer.
+        // 9 keys total: ClipLaunch, SessionOverview, NoteMode1-4, GlobalVariations, Variations, StepSequencer.
         //
         // setMatrixMode(modeId): repaints the grid + Track Stop + Scene Launch
         // + Solo/Mute/Arm rows + Master Select button on every click.
@@ -1333,27 +1333,6 @@
                     [36, 37, 38, 39, 60, 61, 62, 63],
                 ],
             },
-            5: {
-                USE_STOP_ROW: true,
-                IS_NOTE_MODE: true,
-                CHANNEL: 13,
-                PATTERN: [
-                    [1, 5, 3, 1, 5, 3, 1, 5],
-                    [1, 5, 3, 1, 5, 3, 1, 5],
-                    [1, 5, 3, 1, 5, 3, 1, 5],
-                    [1, 5, 3, 1, 5, 3, 1, 5],
-                    [1, 5, 3, 1, 5, 3, 1, 5],
-                    [1, 1, 1, 1, 1, 1, 1, 5],
-                ],
-                NOTEMAP: [
-                    [41, 47, 53, 59, 65, 71, 77, 83],
-                    [40, 46, 52, 58, 64, 70, 76, 82],
-                    [39, 45, 51, 57, 63, 69, 75, 81],
-                    [38, 44, 50, 56, 62, 68, 74, 80],
-                    [37, 43, 49, 55, 61, 67, 73, 79],
-                    [36, 42, 48, 54, 60, 66, 72, 78],
-                ],
-            },
         };
 
         // Helper: build a Note Mode definition from matrixMapsLiterals.
@@ -1411,7 +1390,18 @@
             'NoteMode2': makeNoteModeDef(2),
             'NoteMode3': makeNoteModeDef(3),
             'NoteMode4': makeNoteModeDef(4),
-            'NoteMode5': makeNoteModeDef(5),
+            'GlobalVariations': {
+                desc: 'Per-track variations cockpit. Each grid column is bound to one of the 8 visible tracks; the column shows the variations of the FIRST device on that track with variation_count > 0. Bank Select Up/Down scrolls all columns globally; Scene Launch fires one row across every column at once. Track Stop row keeps its default clip-stop function. Storing variations is still on Shift+Tap Tempo (acts on the appointed device).',
+                gridColor: (r, c) => '#22c55e',
+                gridLabel: (r, c) => `T${c + 1}<br>V${r}`,
+                gridTip: (r, c) => `<strong>Track ${c + 1} — Variation slot ${r} (+ bank offset)</strong>This pad is bound to the first device on track ${c + 1} that has stored variations. Press to set <code>device.selected_variation_index = bank_offset + ${r}</code> and <code>recall_selected_variation()</code> on that rack only. Green = stored, red = currently selected, off = either no rack with variations on this track, or this row is past the rack's variation_count.<div class="related"><em>Bank scroll:</em> Bank Select ↑/↓ shifts the visible window across all columns. <em>Source:</em> MatrixModesComponent.py — _set_global_variations_mode / _global_var_pad_value / _global_var_refresh_leds / _global_var_rebind_tracks.</div>`,
+                stopColor: (c) => '#94a3b8',
+                stopLabel: (c) => `Stop<br>${c + 1}`,
+                stopTip: (c) => `<strong>Track Stop ${c + 1} (Global Variations Mode)</strong>Default clip-stop behavior — Global Variations Mode does not own this row. Storing a new variation on a column's rack is still on Shift+Tap Tempo (acts on the appointed device).`,
+                sceneColor: (r) => '#10b981',
+                sceneLabel: (r) => `Fire<br>row ${r + 1}`,
+                sceneTip: (r) => `<strong>Scene Launch ${r + 1} — Global variation trigger</strong>Press to recall the variation at <code>bank_offset + ${r}</code> across every column that has a stored variation at that index. Tracks without that variation are skipped silently. LED is green if at least one column has a stored variation at this row.<div class="related"><em>Source:</em> MatrixModesComponent.py — _global_var_scene_value / _global_var_refresh_leds.</div>`,
+            },
             'Variations': {
                 desc: 'Rack Macro Variations on the appointed device. The 5×8 grid maps row-major to variation indices 0..39 — green = stored slot, red = currently selected, off = empty. Press a stored pad to set selected_variation_index and recall instantly. LEDs auto-refresh in real time via add_variation_count_listener / add_selected_variation_index_listener (and add_appointed_device_changed_listener on the song). The Track Stop row keeps its default clip-stop function — store is on Shift+Tap Tempo.',
                 gridColor: (r, c) => '#22c55e',

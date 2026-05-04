@@ -53,6 +53,18 @@ The classic APC40 mode. Grid launches clips.
 * **How to access**: Hold **SHIFT** and press **Track Select 3**.
 * **Function**: Converts the center 4x4 grid into static MIDI note triggers (Velocity 127, Channel 10), perfect for finger-drumming on Drum Racks.
 
+### Global Variations Mode (Per-Track Rack Variations)
+* **How to access**: Hold **SHIFT** and press **Track Select 7** to enter Matrix Mode 7 — now `Global Variations Mode` (replaces the former User/Note Mode 5).
+* **Function**: Each of the 8 grid columns is bound to one of the 8 visible session tracks at mode entry. For each track, the script picks the **first device with stored variations** (any Rack — Drum / MIDI / Instrument / Audio Effect) and shows that rack's variations down the column.
+  * **Green pad** — variation slot is stored on this column's rack.
+  * **Red pad** — slot is currently selected on this column's rack.
+  * **Off pad** — slot is empty, OR the column's track has no rack with variations (the entire column stays dark in that case).
+* **Trigger one variation**: Press the pad — sets `selected_variation_index` and recalls instantly on that column's rack only.
+* **Trigger across all tracks**: Press a **Scene Launch** button. Scene 1 recalls row 1 across every column that has a variation at that row; tracks without that variation are skipped silently. Scene LED lights green when at least one column has a stored variation at that row.
+* **Scroll past 5 variations**: Use **Bank Select ↑ / ↓** to slide the visible window up/down. The same offset is applied to every column.
+* **Track Stop row**: keeps its default clip-stop function in this mode.
+* **Storing variations**: still on **Shift + Tap Tempo** (it acts on the appointed device, not necessarily this column's rack — appoint the rack first via the blue-hand icon or **Shift + Nudge Back**).
+
 ### Variations Mode (Rack Macro Snapshots)
 * **How to access**: Hold **SHIFT** and press the rightmost **Track Select** button (Track Select 8) to enter Matrix Mode 8 — now `Variations Mode` (replaces the former User/Note Mode 6).
 * **Function**: Each of the 40 pads in the 5×8 clip grid maps to one variation slot on the **currently appointed Rack** (Drum Rack, MIDI Rack, Instrument Rack — anything with macros). Row-major: top-left = slot 0, bottom-right = slot 39.

@@ -55,9 +55,21 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._variations_appointed_listener_attached = False
         self._variations_listened_device = None  # device we currently have variation_count/selected_variation_index listeners on
         self._variations_prev_count = 0  # last seen variation_count — used to detect "newly stored" so the new slot becomes selected
+        # Global Variations Mode state (matrix mode 6) — per-track first-rack-with-variations cockpit.
+        self._global_var_pad_buttons = None  # flat 5x8 list while active
+        self._global_var_scene_buttons = None  # 5 scene-launch buttons while active
+        self._global_var_bank_up_button = None
+        self._global_var_bank_down_button = None
+        self._global_var_bank_offset = 0
+        self._global_var_track_racks = []  # 8 entries: (track, rack_or_None) per column
+        self._global_var_listened_tracks = []
+        self._global_var_listened_devices = []
+        self._global_var_song_tracks_listener_attached = False
+        self._global_var_song_visible_tracks_listener_attached = False
 
         
     def disconnect(self):
+        self._teardown_global_variations_mode()
         self._teardown_variations_mode()
         for button in self._modes_buttons:
             button.remove_value_listener(self._mode_value)
@@ -119,8 +131,9 @@ class MatrixModesComponent(ModeSelectorComponent):
     
     def _set_modes(self):
         if self.is_enabled():
-            # Tear down Variations Mode listeners before switching to any other mode,
+            # Tear down Variations / Global Variations Mode listeners before switching to any other mode,
             # so the pad/store callbacks don't outlive their slot.
+            self._teardown_global_variations_mode()
             self._teardown_variations_mode()
             self._session.set_allow_update(False)
             self._session_zoom.set_allow_update(False)
@@ -172,7 +185,7 @@ class MatrixModesComponent(ModeSelectorComponent):
             elif (self._mode_index == 5):
                 self._set_note_mode(PATTERN_4, CHANNEL_4, NOTEMAP_4, USE_STOP_ROW_4, IS_NOTE_MODE_4)
             elif (self._mode_index == 6):
-                self._set_note_mode(PATTERN_5, CHANNEL_5, NOTEMAP_5, USE_STOP_ROW_5, IS_NOTE_MODE_5)
+                self._set_global_variations_mode()
             elif (self._mode_index == 7):
                 self._set_variations_mode()
             else:
@@ -436,6 +449,402 @@ class MatrixModesComponent(ModeSelectorComponent):
         # not enough. Belt + listener: the second paint inside the listener is
         # cheap (~48 LED writes).
         self._refresh_variations_leds()
+
+
+    # --- Global Variations Mode (matrix slot 6) ------------------------------
+    # Per-track variations cockpit: each grid column shows the variations of
+    # the first device with variation_count > 0 on the visible track at that
+    # column. Bank Select Up/Down scrolls all columns globally; Scene Launch
+    # buttons fire one row across every column at once. Track Stop row keeps
+    # its default clip-stop wiring. Storing a variation is still on
+    # Shift+Tap Tempo (which acts on the appointed device — the user must
+    # appoint the column's rack first via the blue-hand icon or
+    # Shift+Nudge Back).
+
+    def _set_global_variations_mode(self):
+        self._session_zoom.set_zoom_button(None)
+        self._session_zoom.set_enabled(False)
+
+        # Detach clip-launch wiring on the 5x8 grid; pads stay set_enabled(True)
+        # so install_connections routes MIDI to my listener (lesson from 5j0:
+        # set_enabled(False) silently breaks pad presses).
+        pad_buttons = []
+        for scene_index in range(5):
+            scene = self._session.scene(scene_index)
+            for track_index in range(8):
+                clip_slot = scene.clip_slot(track_index)
+                clip_slot.set_launch_button(None)
+                button = self._matrix.get_button(track_index, scene_index)
+                button.use_default_message()
+                button.set_enabled(True)
+                pad_buttons.append(button)
+        for button in pad_buttons:
+            button.add_value_listener(self._global_var_pad_value, identify_sender=True)
+        self._global_var_pad_buttons = pad_buttons
+
+        # Take over Scene Launch buttons. scene.set_launch_button(None) detaches
+        # Live's clip-launch binding; we re-attach in teardown.
+        scene_buttons = []
+        for scene_index in range(5):
+            scene = self._session.scene(scene_index)
+            scene.set_launch_button(None)
+            scene_button = self._parent._scene_launch_buttons[scene_index]
+            scene_button.use_default_message()
+            scene_button.set_enabled(True)
+            scene_buttons.append(scene_button)
+        for button in scene_buttons:
+            button.add_value_listener(self._global_var_scene_value, identify_sender=True)
+        self._global_var_scene_buttons = scene_buttons
+
+        # Take over Bank Select Up/Down. Detach the session's scene-bank wiring
+        # so the buttons no longer page scenes while in this mode.
+        try:
+            self._session.set_scene_bank_buttons(None, None)
+        except Exception:
+            pass
+        up_button = self._parent._up_button
+        down_button = self._parent._down_button
+        up_button.use_default_message()
+        up_button.set_enabled(True)
+        down_button.use_default_message()
+        down_button.set_enabled(True)
+        up_button.add_value_listener(self._global_var_bank_up_value)
+        down_button.add_value_listener(self._global_var_bank_down_value)
+        self._global_var_bank_up_button = up_button
+        self._global_var_bank_down_button = down_button
+
+        self._global_var_bank_offset = 0
+
+        # Song-level structural listeners — rescan when tracks are added/removed/reordered.
+        song = self.song()
+        if hasattr(song, 'add_tracks_listener') and not self._global_var_song_tracks_listener_attached:
+            try:
+                song.add_tracks_listener(self._global_var_on_song_tracks_changed)
+                self._global_var_song_tracks_listener_attached = True
+            except Exception:
+                self._global_var_song_tracks_listener_attached = False
+        if hasattr(song, 'add_visible_tracks_listener') and not self._global_var_song_visible_tracks_listener_attached:
+            try:
+                song.add_visible_tracks_listener(self._global_var_on_song_tracks_changed)
+                self._global_var_song_visible_tracks_listener_attached = True
+            except Exception:
+                self._global_var_song_visible_tracks_listener_attached = False
+
+        self._global_var_rebind_tracks()
+
+        self._session.set_enabled(True)
+        self._session.set_show_highlight(True)
+        self._global_var_refresh_leds()
+
+
+    def _teardown_global_variations_mode(self):
+        if self._global_var_pad_buttons is not None:
+            for button in self._global_var_pad_buttons:
+                try:
+                    button.remove_value_listener(self._global_var_pad_value)
+                except Exception:
+                    pass
+                try:
+                    button.send_value(0, True)
+                except Exception:
+                    pass
+            self._global_var_pad_buttons = None
+        if self._global_var_scene_buttons is not None:
+            for button in self._global_var_scene_buttons:
+                try:
+                    button.remove_value_listener(self._global_var_scene_value)
+                except Exception:
+                    pass
+                try:
+                    button.send_value(0, True)
+                except Exception:
+                    pass
+            # Restore Live's scene clip-launch binding so scenes fire normally
+            # outside this mode (set_launch_button(None) is sticky until re-set).
+            for scene_index in range(5):
+                try:
+                    scene = self._session.scene(scene_index)
+                    scene.set_launch_button(self._parent._scene_launch_buttons[scene_index])
+                except Exception:
+                    pass
+            self._global_var_scene_buttons = None
+        if self._global_var_bank_up_button is not None:
+            try:
+                self._global_var_bank_up_button.remove_value_listener(self._global_var_bank_up_value)
+            except Exception:
+                pass
+            self._global_var_bank_up_button = None
+        if self._global_var_bank_down_button is not None:
+            try:
+                self._global_var_bank_down_button.remove_value_listener(self._global_var_bank_down_value)
+            except Exception:
+                pass
+            self._global_var_bank_down_button = None
+        # Restore the session's scene-bank wiring (down=down_button, up=up_button)
+        # so subsequent modes get back their scene-paging behavior.
+        try:
+            self._session.set_scene_bank_buttons(self._parent._down_button, self._parent._up_button)
+        except Exception:
+            pass
+
+        # Detach per-track + per-device listeners.
+        for track in self._global_var_listened_tracks:
+            if hasattr(track, 'remove_devices_listener'):
+                try:
+                    track.remove_devices_listener(self._global_var_on_track_devices_changed)
+                except Exception:
+                    pass
+        self._global_var_listened_tracks = []
+        for device in self._global_var_listened_devices:
+            if hasattr(device, 'remove_variation_count_listener'):
+                try:
+                    device.remove_variation_count_listener(self._global_var_refresh_leds)
+                except Exception:
+                    pass
+            if hasattr(device, 'remove_selected_variation_index_listener'):
+                try:
+                    device.remove_selected_variation_index_listener(self._global_var_refresh_leds)
+                except Exception:
+                    pass
+        self._global_var_listened_devices = []
+
+        # Detach song-level listeners.
+        song = self.song()
+        if self._global_var_song_tracks_listener_attached and hasattr(song, 'remove_tracks_listener'):
+            try:
+                song.remove_tracks_listener(self._global_var_on_song_tracks_changed)
+            except Exception:
+                pass
+            self._global_var_song_tracks_listener_attached = False
+        if self._global_var_song_visible_tracks_listener_attached and hasattr(song, 'remove_visible_tracks_listener'):
+            try:
+                song.remove_visible_tracks_listener(self._global_var_on_song_tracks_changed)
+            except Exception:
+                pass
+            self._global_var_song_visible_tracks_listener_attached = False
+
+        self._global_var_track_racks = []
+        self._global_var_bank_offset = 0
+
+
+    def _global_var_rebind_tracks(self):
+        # Detach existing per-track + per-device listeners before reseating.
+        for track in self._global_var_listened_tracks:
+            if hasattr(track, 'remove_devices_listener'):
+                try:
+                    track.remove_devices_listener(self._global_var_on_track_devices_changed)
+                except Exception:
+                    pass
+        self._global_var_listened_tracks = []
+        for device in self._global_var_listened_devices:
+            if hasattr(device, 'remove_variation_count_listener'):
+                try:
+                    device.remove_variation_count_listener(self._global_var_refresh_leds)
+                except Exception:
+                    pass
+            if hasattr(device, 'remove_selected_variation_index_listener'):
+                try:
+                    device.remove_selected_variation_index_listener(self._global_var_refresh_leds)
+                except Exception:
+                    pass
+        self._global_var_listened_devices = []
+
+        # Resolve the 8 visible tracks via clip_slot.canonical_parent — works
+        # regardless of how the SessionComponent reports track_offset.
+        tracks = []
+        for track_index in range(8):
+            try:
+                clip_slot = self._session.scene(0).clip_slot(track_index)
+                track = clip_slot.canonical_parent
+            except Exception:
+                track = None
+            tracks.append(track)
+
+        # For each visible track: hook devices_listener; pick first rack with variation_count > 0.
+        racks = []
+        for track in tracks:
+            rack = None
+            if track is not None:
+                if hasattr(track, 'add_devices_listener'):
+                    try:
+                        track.add_devices_listener(self._global_var_on_track_devices_changed)
+                        self._global_var_listened_tracks.append(track)
+                    except Exception:
+                        pass
+                try:
+                    devices = list(track.devices)
+                except Exception:
+                    devices = []
+                for device in devices:
+                    if hasattr(device, 'variation_count'):
+                        try:
+                            if int(device.variation_count) > 0:
+                                rack = device
+                                break
+                        except Exception:
+                            continue
+            racks.append((track, rack))
+            if rack is not None:
+                if hasattr(rack, 'add_variation_count_listener'):
+                    try:
+                        rack.add_variation_count_listener(self._global_var_refresh_leds)
+                    except Exception:
+                        pass
+                if hasattr(rack, 'add_selected_variation_index_listener'):
+                    try:
+                        rack.add_selected_variation_index_listener(self._global_var_refresh_leds)
+                    except Exception:
+                        pass
+                self._global_var_listened_devices.append(rack)
+        self._global_var_track_racks = racks
+
+
+    def _global_var_on_song_tracks_changed(self):
+        if self._mode_index != 6:
+            return
+        self._global_var_rebind_tracks()
+        self._global_var_refresh_leds()
+
+
+    def _global_var_on_track_devices_changed(self):
+        if self._mode_index != 6:
+            return
+        self._global_var_rebind_tracks()
+        self._global_var_refresh_leds()
+
+
+    def _global_var_refresh_leds(self):
+        if self._global_var_pad_buttons is None:
+            return
+        # Pads
+        for col in range(8):
+            track, rack = self._global_var_track_racks[col] if col < len(self._global_var_track_racks) else (None, None)
+            count = 0
+            selected = -1
+            if rack is not None:
+                if hasattr(rack, 'variation_count'):
+                    try:
+                        count = int(rack.variation_count)
+                    except Exception:
+                        count = 0
+                if hasattr(rack, 'selected_variation_index'):
+                    try:
+                        selected = int(rack.selected_variation_index)
+                    except Exception:
+                        selected = -1
+            for row in range(5):
+                pad_index = row * 8 + col
+                variation_index = self._global_var_bank_offset + row
+                if rack is None:
+                    color = 0
+                elif variation_index == selected and 0 <= selected < count:
+                    color = 3  # red
+                elif variation_index < count:
+                    color = 1  # green
+                else:
+                    color = 0
+                button = self._global_var_pad_buttons[pad_index]
+                try:
+                    button.set_on_off_values(color if color != 0 else 127, 0)
+                    button.send_value(color, True)
+                except Exception:
+                    pass
+        # Scene Launch row — green if at least one column has a stored variation at that row.
+        if self._global_var_scene_buttons is not None:
+            for row in range(5):
+                variation_index = self._global_var_bank_offset + row
+                any_stored = False
+                for (_track, rack) in self._global_var_track_racks:
+                    if rack is None or not hasattr(rack, 'variation_count'):
+                        continue
+                    try:
+                        if int(rack.variation_count) > variation_index:
+                            any_stored = True
+                            break
+                    except Exception:
+                        continue
+                color = 1 if any_stored else 0
+                button = self._global_var_scene_buttons[row]
+                try:
+                    button.set_on_off_values(color if color != 0 else 127, 0)
+                    button.send_value(color, True)
+                except Exception:
+                    pass
+
+
+    def _global_var_pad_value(self, value, sender):
+        if not self.is_enabled() or value == 0:
+            return
+        if self._global_var_pad_buttons is None:
+            return
+        try:
+            pad_index = self._global_var_pad_buttons.index(sender)
+        except ValueError:
+            return
+        col = pad_index % 8
+        row = pad_index // 8
+        if col >= len(self._global_var_track_racks):
+            return
+        track, rack = self._global_var_track_racks[col]
+        if rack is None or not hasattr(rack, 'variation_count'):
+            return
+        try:
+            count = int(rack.variation_count)
+        except Exception:
+            return
+        variation_index = self._global_var_bank_offset + row
+        if variation_index >= count:
+            return  # empty slot
+        try:
+            rack.selected_variation_index = variation_index
+            if hasattr(rack, 'recall_selected_variation'):
+                rack.recall_selected_variation()
+        except Exception:
+            return
+        # Synchronous repaint — same belt+listener strategy as 260504-5j0.
+        self._global_var_refresh_leds()
+
+
+    def _global_var_scene_value(self, value, sender):
+        if not self.is_enabled() or value == 0:
+            return
+        if self._global_var_scene_buttons is None:
+            return
+        try:
+            scene_index = self._global_var_scene_buttons.index(sender)
+        except ValueError:
+            return
+        variation_index = self._global_var_bank_offset + scene_index
+        for (_track, rack) in self._global_var_track_racks:
+            if rack is None or not hasattr(rack, 'variation_count'):
+                continue
+            try:
+                if int(rack.variation_count) <= variation_index:
+                    continue
+            except Exception:
+                continue
+            try:
+                rack.selected_variation_index = variation_index
+                if hasattr(rack, 'recall_selected_variation'):
+                    rack.recall_selected_variation()
+            except Exception:
+                continue
+        self._global_var_refresh_leds()
+
+
+    def _global_var_bank_up_value(self, value):
+        if not self.is_enabled() or value == 0:
+            return
+        if self._global_var_bank_offset > 0:
+            self._global_var_bank_offset -= 1
+            self._global_var_refresh_leds()
+
+
+    def _global_var_bank_down_value(self, value):
+        if not self.is_enabled() or value == 0:
+            return
+        self._global_var_bank_offset += 1
+        self._global_var_refresh_leds()
 
 
 # local variables:
