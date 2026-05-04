@@ -33,6 +33,7 @@ The encoders on the right side of the APC40 (Track Control and Device Control) c
 ### Alternate Device & EQ/Filter Smart Control
 * **Shift + Send A**: Sets the top Track Control knobs to act as a *secondary* Device Control independent of the bottom ones.
 * **Shift + Send B**: Engages **EQ/Filter Smart Control**. The Track Control knobs automatically map to AutoFilter cutoff/resonance, EQ8 bands, and Sends depending on what's in the track.
+  * **Toggle / Momentary kill switches**: in this mode the **Send A / B / C** buttons act as kill switches for **bass / mids / highs** (FilterEQ3 / Audio Effect Rack — or the first three filter bands on EQ8). They have the same dual behavior as Solo / Mute (v1.0): a short tap toggles the kill, a hold longer than 400 ms acts momentary (kill engages on press, reverts on release). Threshold mirrors `LONG_PRESS_DELAY` in `ToggleMomentaryChannelStripComponent.py:8` for consistency.
 
 ---
 

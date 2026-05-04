@@ -28,6 +28,11 @@ from _Framework.EncoderElement import EncoderElement
 from _Framework.MixerComponent import MixerComponent 
 
 from _Generic.Devices import *
+
+# 4 ticks x 100ms/tick = 400ms, matching ToggleMomentaryChannelStripComponent.py:8
+# so the EQ kill-switch dual behavior feels identical to the v1.0 Solo / Mute one.
+LONG_PRESS_DELAY = 4
+
 EQ_DEVICES = {'Eq8': {'Gains': [ ('%i Gain A' % (index + 1)) for index in range(8) ],
                       'Cuts': [ ('%i Filter On A' % (index + 1)) for index in range(8) ]},
               'FilterEQ3': {'Gains': ['GainLo','GainMid','GainHi'],
@@ -313,26 +318,106 @@ class SpecialTrackEQComponent(TrackEQComponent): #added to override _cut_value
         TrackEQComponent.__init__(self)
         self._ignore_cut_buttons = False
         self._parent = parent
+        # Toggle / momentary state for the EQ kill switches in TRACK CONTROL MODE 3
+        # (Shift + Send B). Mirrors the v1.0 Solo / Mute state machine in
+        # ToggleMomentaryChannelStripComponent. State arrays are sized to match
+        # the wired cut-button count by set_cut_buttons.
+        self._cut_ticks_delay = []
+        self._cut_state_before_press = []
+        self._cut_momentary_active = []
+        self._register_timer_callback(self._on_timer)
+
+    def disconnect(self):
+        # Revert any in-flight momentary holds so the parameter doesn't get stuck
+        # in the just-pressed state.
+        if self._cut_buttons is not None and self._device is not None:
+            device_dict = EQ_DEVICES.get(self._device.class_name, {})
+            cut_names = device_dict.get('Cuts', [])
+            for i in range(len(self._cut_buttons)):
+                if i < len(self._cut_momentary_active) and self._cut_momentary_active[i]:
+                    if i < len(cut_names):
+                        parameter = get_parameter_by_name(self._device, cut_names[i])
+                        if parameter is not None:
+                            try:
+                                parameter.value = self._cut_state_before_press[i]
+                            except Exception:
+                                pass
+                    self._cut_momentary_active[i] = False
+        try:
+            self._unregister_timer_callback(self._on_timer)
+        except Exception:
+            pass
+        TrackEQComponent.disconnect(self)
+
+    def set_cut_buttons(self, buttons):
+        # Revert any momentary hold on the OUTGOING buttons before swapping —
+        # otherwise the captured state gets dropped when the array is resized.
+        if self._cut_buttons is not None and self._device is not None:
+            device_dict = EQ_DEVICES.get(self._device.class_name, {})
+            cut_names = device_dict.get('Cuts', [])
+            for i in range(len(self._cut_buttons)):
+                if i < len(self._cut_momentary_active) and self._cut_momentary_active[i]:
+                    if i < len(cut_names):
+                        parameter = get_parameter_by_name(self._device, cut_names[i])
+                        if parameter is not None:
+                            try:
+                                parameter.value = self._cut_state_before_press[i]
+                            except Exception:
+                                pass
+        TrackEQComponent.set_cut_buttons(self, buttons)
+        n = len(buttons) if buttons is not None else 0
+        self._cut_ticks_delay = [-1] * n
+        self._cut_state_before_press = [0.0] * n
+        self._cut_momentary_active = [False] * n
+
+    def _on_timer(self):
+        if not self.is_enabled():
+            return
+        for i in range(len(self._cut_ticks_delay)):
+            if self._cut_ticks_delay[i] > -1:
+                if self._cut_ticks_delay[i] == 0:
+                    self._cut_momentary_active[i] = True
+                self._cut_ticks_delay[i] -= 1
 
     def _cut_value(self, value, sender):
         assert (sender in self._cut_buttons)
         assert (value in range(128))
-        if self._ignore_cut_buttons == False: #added
-            if (self.is_enabled() and (self._device != None)):
-                if ((not sender.is_momentary()) or (value != 0)):
-                    device_dict = EQ_DEVICES[self._device.class_name]
-                    if ('Cuts' in list(device_dict.keys())):
-                        cut_names = device_dict['Cuts']
-                        index = list(self._cut_buttons).index(sender)
-                        if (index in range(len(cut_names))):
-                            parameter = get_parameter_by_name(self._device, cut_names[index])
-                            if (parameter != None):
-                                if parameter.value > 0:
-                                    parameter.value = 0
-                                else:
-                                    parameter.value = 1
-                                if self._device.class_name == 'AudioEffectGroupDevice':
-                                    parameter.value = parameter.value * 127
+        if self._ignore_cut_buttons:
+            return
+        if not (self.is_enabled() and self._device is not None):
+            return
+        device_dict = EQ_DEVICES[self._device.class_name]
+        if 'Cuts' not in device_dict:
+            return
+        cut_names = device_dict['Cuts']
+        index = list(self._cut_buttons).index(sender)
+        if index >= len(cut_names) or index >= len(self._cut_ticks_delay):
+            return
+        parameter = get_parameter_by_name(self._device, cut_names[index])
+        if parameter is None:
+            return
+        if value != 0:
+            # Press — capture pre-press state, toggle, start countdown.
+            try:
+                self._cut_state_before_press[index] = float(parameter.value)
+            except Exception:
+                return
+            if parameter.value > 0:
+                parameter.value = 0
+            else:
+                parameter.value = 1
+            if self._device.class_name == 'AudioEffectGroupDevice':
+                parameter.value = parameter.value * 127
+            self._cut_ticks_delay[index] = LONG_PRESS_DELAY
+        else:
+            # Release — if hold crossed the threshold, revert to captured state.
+            if self._cut_momentary_active[index]:
+                try:
+                    parameter.value = self._cut_state_before_press[index]
+                except Exception:
+                    pass
+                self._cut_momentary_active[index] = False
+            self._cut_ticks_delay[index] = -1
 
 
 
