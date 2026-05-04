@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-02T12:42:56.096Z",
+  "timestamp": "2026-05-04T01:47:03.175Z",
   "context": "phase",
   "phase": "06",
   "phase_name": "create-user-manual",
@@ -18,7 +18,8 @@
     {"id": "06-06", "name": "create gen_apc40_layout.py + apc40-layout.svg", "status": "done", "commit": "8625243"},
     {"id": "06-07", "name": "write INSTALL.md and TROUBLESHOOTING.md", "status": "done", "commit": "7a25a2a"},
     {"id": "06-08", "name": "rewrite README.md to thin entry pointer", "status": "done", "commit": "5d94f5c"},
-    {"id": "06-gap-layout", "name": "overhaul APC40 layout in manual.html + SVG to match user reference image", "status": "done", "commit": "e5f067e"}
+    {"id": "06-gap-layout", "name": "overhaul APC40 layout in manual.html + SVG to match user reference image", "status": "done", "commit": "e5f067e"},
+    {"id": "06-polish-spells", "name": "design-spells micro-interactions: boot cascade, breathing pulse, pad press lift, tooltip overshoot, idle twinkle, SHIFT triple-click easter egg (all gated on prefers-reduced-motion)", "status": "done", "commit": "1decbdf"}
   ],
   "remaining_tasks": [
     {"id": "06-verify-final", "name": "Re-run /gsd-verify-work 6 (or user 'approved') to flip phase verification from human_needed to passed after layout overhaul user-confirmation", "status": "not_started"},
@@ -29,15 +30,15 @@
   ],
   "blockers": [
     {
-      "description": "Layout overhaul (commit e5f067e) is committed but not yet user-confirmed. Resuming agent must wait for user feedback in browser before flipping verification status.",
+      "description": "Layout overhaul (e5f067e) + design-spells polish (1decbdf) are both committed but neither has been user-confirmed yet. Resuming agent must wait for user feedback in browser before flipping verification status.",
       "type": "human_action",
-      "workaround": "User opens docs/manual.html, compares to APC40, reports any remaining mismatch."
+      "workaround": "User opens docs/manual.html, compares to APC40 + watches the boot cascade / hover lifts / mode breathing / tooltip overshoot / idle twinkle, reports any remaining mismatch or animation that's too aggressive."
     }
   ],
   "human_actions_pending": [
     {
-      "action": "Open docs/manual.html in a browser; compare against actual APC40 hardware; report any remaining mismatch or say 'approved'",
-      "context": "Phase 6 verification status is human_needed (9/10 must-haves passed; visual/UX correctness routed to human). The layout was rewritten in commit e5f067e to match the user's reference image (2026-05-02), but the user has not yet confirmed the rewrite is correct.",
+      "action": "Open docs/manual.html in a browser; compare against actual APC40 hardware; report any remaining layout mismatch or say 'approved'. Also rate the spells (boot cascade, breathing pulse, pad press lift, tooltip overshoot, idle twinkle, SHIFT triple-click easter egg) — too much, just right, or dial down.",
+      "context": "Phase 6 verification status is human_needed (9/10 must-haves passed; visual/UX correctness routed to human). The layout was rewritten in commit e5f067e to match the user's reference image (2026-05-02). On 2026-05-02 the user invoked /design-spells and 1decbdf added 6 micro-interactions (CSS-transform-only, GPU-accelerated, prefers-reduced-motion gated, no data-* contract changes).",
       "blocking": true
     },
     {
@@ -84,6 +85,6 @@
     "README.md.bak (backup of pre-v1.2 readme; user decision pending)",
     "APC.py, EncoderEQComponent.py, and other root-level *.py files (NEVER tracked in this repo by design)"
   ],
-  "next_action": "Wait for user feedback on docs/manual.html layout (open in browser, compare to APC40, report mismatch or say 'approved'). If approved: run /gsd-verify-work 6 OR directly run gsd-tools phase complete 06, commit the result, evolve PROJECT.md, and route to next phase / milestone wrap.",
-  "context_notes": "This repo is .planning-only at the top level - source files (APC.py, APC_64_40_9.py, EncoderEQComponent.py, MatrixModesComponent.py, Matrix_Maps.py, etc.) are UNTRACKED at the repo root by design. They live on disk and Ableton Live loads them from the project root, but they're not in git history. Phase 6 deliverables (docs/*, README.md) ARE tracked. The eq-filter-smart-control debug fix landed in EncoderEQComponent.py:124-138 but is NOT in any commit - it's a working-tree-only change to an untracked file. If the user wants the fix versioned, they need a different repo strategy. Phase 6 used worktree isolation for parallel execution (5 waves, 8 plans + 1 gap closure = 32 commits total this session)."
+  "next_action": "Wait for user feedback on docs/manual.html (layout + spells). If approved: run /gsd-verify-work 6 OR directly run gsd-tools phase complete 06, commit the result, evolve PROJECT.md, and route to next phase / milestone wrap. If a specific spell is 'too much', tune that one — they're each isolated to a single CSS keyframe block + (for the JS-driven ones) a single function (bootCascade / startIdleTwinkle / wireWelcomeEasterEgg).",
+  "context_notes": "This repo is .planning-only at the top level - source files (APC.py, APC_64_40_9.py, EncoderEQComponent.py, MatrixModesComponent.py, Matrix_Maps.py, etc.) are UNTRACKED at the repo root by design. They live on disk and Ableton Live loads them from the project root, but they're not in git history. Phase 6 deliverables (docs/*, README.md) ARE tracked. The eq-filter-smart-control debug fix landed in EncoderEQComponent.py:124-138 but is NOT in any commit - it's a working-tree-only change to an untracked file. If the user wants the fix versioned, they need a different repo strategy. Phase 6 used worktree isolation for parallel execution (5 waves, 8 plans + 1 gap closure + 1 spells polish = 33 commits across two sessions)."
 }
