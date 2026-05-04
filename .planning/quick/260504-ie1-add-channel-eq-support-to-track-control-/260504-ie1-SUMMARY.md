@@ -3,6 +3,12 @@ quick_id: 260504-ie1
 description: add Channel EQ support to TRACK CONTROL MODE 3 (Shift + Send B)
 date: 2026-05-04
 status: complete
+uat_passed: 2026-05-04
+final_commit: 5660914
+commits:
+  - 5248cce feat — Channel EQ detection + extras wiring + Log.txt diagnostic dump
+  - 847a44f docs — STATE.md commit-hash backfill
+  - 5660914 fix — output param is 'Output' (not 'Output Gain'); diagnostic dump removed after serving its purpose
 ---
 
 # Quick Task 260504-ie1 — Summary
@@ -50,12 +56,15 @@ grep -n "_channel_eq_device\|_highpass_button" EncoderEQComponent.py  # 6+ hits
 grep -n "Channel EQ" APC40_User_Manual.md  # multiple hits in the Shift+Send B section
 ```
 
-## Hardware UAT (still required, in Live)
+## Hardware UAT (passed 2026-05-04)
 
-- On a track with a Channel EQ device: enter Shift + Send B. Encoders 5/6/7 should drive Low/Mid/High Gain; encoder 4 → Output Gain; encoder 0 → Mid Freq; Pan button toggles Highpass on/off (and LED tracks the parameter).
-- Open Live's `Log.txt` and look for `[ChannelEq] params on detected device:` — paste the lines back here if any of the guessed parameter names need adjusting.
-- On a track WITHOUT a Channel EQ device but with a FilterEQ3 / EQ8 / Audio Effect Rack: the existing wiring (AutoFilter on 0/4, lock on Pan, toggle/momentary kill switches on Send A/B/C) should still work unchanged.
-- Switch between a Channel EQ track and a non-Channel-EQ track several times — Pan button should reattach to highpass or lock per track without sticking.
+User confirmed all five encoder + button mappings working in Live with a Channel EQ on the track: encoders 0/4 (Mid Freq + Output) and 5/6/7 (Low/Mid/High Gain) drive their parameters; the Pan button toggles Highpass on/off with correct LED tracking. Non-Channel-EQ tracks fall back to AutoFilter + lock unchanged.
+
+## Iteration history
+
+The diagnostic `log_message` dump shipped in the initial commit (5248cce) caught the one parameter-name miss in a single UAT round: Live names the output trim simply `'Output'`, not `'Output Gain'` as the initial guess assumed. Fix landed in 5660914 alongside removal of the one-shot dump. The other guessed names (`Mid Freq`, `Highpass On`, `Low Gain`, `Mid Gain`, `High Gain`) were correct first try.
+
+Reusable lesson: **for Live API parameter-name guesses, ship the one-shot `device.parameters` dump in the initial commit.** The dump is ~5 lines, costs nothing on the happy path (only fires once per session), and turns "is this the right name?" from a multi-round UAT loop into a single Log.txt paste.
 
 ## Out of scope
 

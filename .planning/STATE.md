@@ -110,7 +110,7 @@ None yet.
 | 260504-8yh | remove "MATRIX MODE 7 – USER/NOTE MODE 5" and add a new global variations mode | 2026-05-04 | d1bb8fa | [260504-8yh-remove-matrix-mode-7-user-note-mode-5-an](./quick/260504-8yh-remove-matrix-mode-7-user-note-mode-5-an/) |
 | 260504-hea | use Stop All Clips to randomize macros in both Variations modes | 2026-05-04 | dd3c423 | [260504-hea-use-stop-all-clips-to-randomize-macros-i](./quick/260504-hea-use-stop-all-clips-to-randomize-macros-i/) |
 | 260504-i1b | toggle/momentary kill switches in EQ Smart Control mode (Shift + Send B) | 2026-05-04 | ecfd2a0 | [260504-i1b-toggle-momentary-kill-switches-in-eq-sma](./quick/260504-i1b-toggle-momentary-kill-switches-in-eq-sma/) |
-| 260504-ie1 | add Channel EQ support to TRACK CONTROL MODE 3 (Shift + Send B) | 2026-05-04 | 5248cce | [260504-ie1-add-channel-eq-support-to-track-control-](./quick/260504-ie1-add-channel-eq-support-to-track-control-/) |
+| 260504-ie1 | add Channel EQ support to TRACK CONTROL MODE 3 (Shift + Send B) | 2026-05-04 | 5660914 | [260504-ie1-add-channel-eq-support-to-track-control-](./quick/260504-ie1-add-channel-eq-support-to-track-control-/) |
 
 ## Session Continuity
 
