@@ -29,7 +29,7 @@ Milestone: v1.2 Documentation — **ready to execute** (planned 2026-05-02)
 Phase: 6 (create-user-manual) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 6
-Last activity: 2026-05-04 -- Completed quick task 260504-i1b: toggle/momentary kill switches in EQ Smart Control mode (Shift + Send B)
+Last activity: 2026-05-04 -- Completed quick task 260504-ie1: add Channel EQ support to TRACK CONTROL MODE 3 (Shift + Send B)
 
 Progress: [░░░░░░░░░░] 0% of v1.2
 
@@ -110,6 +110,7 @@ None yet.
 | 260504-8yh | remove "MATRIX MODE 7 – USER/NOTE MODE 5" and add a new global variations mode | 2026-05-04 | d1bb8fa | [260504-8yh-remove-matrix-mode-7-user-note-mode-5-an](./quick/260504-8yh-remove-matrix-mode-7-user-note-mode-5-an/) |
 | 260504-hea | use Stop All Clips to randomize macros in both Variations modes | 2026-05-04 | dd3c423 | [260504-hea-use-stop-all-clips-to-randomize-macros-i](./quick/260504-hea-use-stop-all-clips-to-randomize-macros-i/) |
 | 260504-i1b | toggle/momentary kill switches in EQ Smart Control mode (Shift + Send B) | 2026-05-04 | ecfd2a0 | [260504-i1b-toggle-momentary-kill-switches-in-eq-sma](./quick/260504-i1b-toggle-momentary-kill-switches-in-eq-sma/) |
+| 260504-ie1 | add Channel EQ support to TRACK CONTROL MODE 3 (Shift + Send B) | 2026-05-04 | _pending_ | [260504-ie1-add-channel-eq-support-to-track-control-](./quick/260504-ie1-add-channel-eq-support-to-track-control-/) |
 
 ## Session Continuity
 

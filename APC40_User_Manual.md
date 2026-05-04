@@ -34,6 +34,13 @@ The encoders on the right side of the APC40 (Track Control and Device Control) c
 * **Shift + Send A**: Sets the top Track Control knobs to act as a *secondary* Device Control independent of the bottom ones.
 * **Shift + Send B**: Engages **EQ/Filter Smart Control**. The Track Control knobs automatically map to AutoFilter cutoff/resonance, EQ8 bands, and Sends depending on what's in the track.
   * **Toggle / Momentary kill switches**: in this mode the **Send A / B / C** buttons act as kill switches for **bass / mids / highs** (FilterEQ3 / Audio Effect Rack — or the first three filter bands on EQ8). They have the same dual behavior as Solo / Mute (v1.0): a short tap toggles the kill, a hold longer than 400 ms acts momentary (kill engages on press, reverts on release). Threshold mirrors `LONG_PRESS_DELAY` in `ToggleMomentaryChannelStripComponent.py:8` for consistency.
+  * **Channel EQ (Live 11+)**: when the track contains Live's **Channel EQ** device, the Track Control row remaps automatically:
+    * **Encoder 1** (first knob) → **Mid Freq** (split / sweep frequency).
+    * **Encoder 5** (the knob to the left of the band gains) → **Output Gain**.
+    * **Encoders 6 / 7 / 8** (last three knobs) → **Low / Mid / High Gain** — same positions used for FilterEQ3 / Audio Effect Rack so the band gains are always under the same knobs.
+    * **Pan button** → **Highpass on/off** (replaces the lock function while Channel EQ is the active EQ device).
+    * Send A / B / C kill buttons are inactive on Channel EQ (the device has no per-band on/off switches).
+    * On first activation the script logs the detected Channel EQ's parameter names to Live's `Log.txt` (lines starting `[ChannelEq]`) so the parameter-name mapping can be verified.
 
 ---
 

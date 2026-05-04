@@ -38,8 +38,25 @@ EQ_DEVICES = {'Eq8': {'Gains': [ ('%i Gain A' % (index + 1)) for index in range(
               'FilterEQ3': {'Gains': ['GainLo','GainMid','GainHi'],
                             'Cuts': ['LowOn','MidOn','HighOn']},
               'AudioEffectGroupDevice': {'Gains': [('Macro %i' % (index + 2)) for index in range(3) ], #last 3 buttons of top row
-                                         'Cuts': [('Macro %i' % (index + 6)) for index in range(3) ]} #last 3 buttons of bottom row
+                                         'Cuts': [('Macro %i' % (index + 6)) for index in range(3) ]}, #last 3 buttons of bottom row
+              # Channel EQ (Live 11+) — band gains land on the same encoders as FilterEQ3 (5/6/7) for muscle-memory
+              # consistency. Channel EQ has no per-band on/off, so 'Cuts' is empty and the kill buttons stay dark.
+              # Mid Freq / Output Gain / Highpass On are wired separately by EncoderEQComponent (see CHANNEL_EQ_EXTRAS).
+              'ChannelEq': {'Gains': ['Low Gain', 'Mid Gain', 'High Gain'],
+                            'Cuts': []},
               }
+
+# Channel EQ extras — controls that don't fit the gain/cut shape:
+#   - Encoder 0 ("very first encoder in the first row")    → Mid Freq (the user's "split frequency")
+#   - Encoder 4 ("encoder to the left" of the band knobs)  → Output Gain
+#   - Pan button (buttons[0], directly below encoder 4)    → Highpass on/off (replaces the lock button while ChannelEq is active)
+# Names are best-effort across Live builds; on first detection EncoderEQComponent dumps the actual
+# parameter names to Log.txt under '[ChannelEq]' so they can be verified after one UAT activation.
+CHANNEL_EQ_EXTRAS = {
+    'Output': 'Output Gain',
+    'MidFreq': 'Mid Freq',
+    'HighpassOn': 'Highpass On',
+}
 FILTER_DEVICES = {'AutoFilter': {'Frequency': 'Frequency',
                                  'Resonance': 'Resonance'},
                   'Operator': {'Frequency': 'Filter Freq',
@@ -554,8 +571,15 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._parent = parent
         self._track_eq = SpecialTrackEQComponent(parent)
         self._track_filter = SpecialTrackFilterComponent(parent)
+        # Channel EQ (Live 11+) state — extras that don't fit the gain/cut shape.
+        self._channel_eq_device = None
+        self._channel_eq_logged = False
+        self._highpass_button = None
+        self._highpass_parameter = None
+        self._highpass_listener_attached = False
 
     def disconnect(self):
+        self._teardown_channel_eq_extras()
         self._param_controls = None
         self._mixer = None
         self._buttons = None
@@ -566,6 +590,7 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._parent = None
         self._track_eq = None
         self._track_filter = None
+        self._channel_eq_device = None
 
     def update(self):
         pass
@@ -576,36 +601,168 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._param_controls = controls
         assert ((buttons == None) or (isinstance(buttons, tuple)) or (len(buttons) == 4))
         self._buttons = buttons
-        self.set_lock_button(self._buttons[0])
+        # NB: Pan button (buttons[0]) wiring is decided per-track inside
+        # _update_controls_and_buttons so Channel EQ can claim it as the
+        # Highpass switch — non-ChannelEq tracks fall back to lock.
         self._update_controls_and_buttons()
 
 
     def _update_controls_and_buttons(self):
-        #if self.is_enabled():
-        if self._param_controls != None and self._buttons != None:
-            if self._is_locked != True:
-                self._track = self.song().view.selected_track
-                self._track_eq.set_track(self._track)
-                cut_buttons = [self._buttons[1], self._buttons[2], self._buttons[3]]
-                self._track_eq.set_cut_buttons(tuple(cut_buttons))
-                self._track_eq.set_gain_controls(tuple([self._param_controls[5], self._param_controls[6], self._param_controls[7]]))
-                self._track_filter.set_track(self._track)
-                self._track_filter.set_filter_controls(self._param_controls[0], self._param_controls[4])
-                self._strip = self._mixer._selected_strip
-                self._strip.set_send_controls(tuple([self._param_controls[1], self._param_controls[2], self._param_controls[3]]))         
+        if self._param_controls is None or self._buttons is None:
+            return
+        if self._is_locked != True:
+            self._track = self.song().view.selected_track
 
+        # EQ + sends wiring (always on, regardless of EQ device subclass).
+        self._track_eq.set_track(self._track)
+        cut_buttons = [self._buttons[1], self._buttons[2], self._buttons[3]]
+        self._track_eq.set_cut_buttons(tuple(cut_buttons))
+        self._track_eq.set_gain_controls(tuple([
+            self._param_controls[5], self._param_controls[6], self._param_controls[7]
+        ]))
+
+        # Channel EQ wins on encoders 0/4 + Pan button when present;
+        # otherwise fall back to AutoFilter on encoders 0/4 and lock on Pan.
+        channel_eq = self._detect_channel_eq()
+        if channel_eq is not None:
+            self._track_filter.set_track(None)
+            self._teardown_channel_eq_extras()
+            self._channel_eq_device = channel_eq
+            self._setup_channel_eq_extras(channel_eq)
+            self.set_lock_button(None)
+        else:
+            self._teardown_channel_eq_extras()
+            self._channel_eq_device = None
+            self._track_filter.set_track(self._track)
+            self._track_filter.set_filter_controls(
+                self._param_controls[0], self._param_controls[4]
+            )
+            self.set_lock_button(self._buttons[0])
+
+        if self._is_locked != True:
+            self._strip = self._mixer._selected_strip
+        if self._strip is not None:
+            self._strip.set_send_controls(tuple([
+                self._param_controls[1], self._param_controls[2], self._param_controls[3]
+            ]))
+
+
+    # --- Channel EQ helpers (Live 11+) -----------------------------------
+
+    def _detect_channel_eq(self):
+        if self._track is None:
+            return None
+        try:
+            devices = list(self._track.devices)
+        except Exception:
+            return None
+        for device in reversed(devices):
+            if getattr(device, 'class_name', None) == 'ChannelEq':
+                return device
+        return None
+
+    def _setup_channel_eq_extras(self, channel_eq):
+        if not self._channel_eq_logged:
+            self._channel_eq_logged = True
+            try:
+                self._parent.log_message('[ChannelEq] params on detected device:')
+                for p in channel_eq.parameters:
+                    self._parent.log_message('[ChannelEq]   ' + repr(p.name))
+            except Exception as e:
+                self._parent.log_message('[ChannelEq] params introspection failed: ' + str(e))
+        try:
+            self._param_controls[0].release_parameter()
+        except Exception:
+            pass
+        try:
+            self._param_controls[4].release_parameter()
+        except Exception:
+            pass
+        midfreq = get_parameter_by_name(channel_eq, CHANNEL_EQ_EXTRAS['MidFreq'])
+        if midfreq is not None:
+            try:
+                self._param_controls[0].connect_to(midfreq)
+            except Exception:
+                pass
+        output = get_parameter_by_name(channel_eq, CHANNEL_EQ_EXTRAS['Output'])
+        if output is not None:
+            try:
+                self._param_controls[4].connect_to(output)
+            except Exception:
+                pass
+        self._setup_highpass_button(self._buttons[0], channel_eq)
+
+    def _teardown_channel_eq_extras(self):
+        if self._param_controls is not None:
+            try:
+                self._param_controls[0].release_parameter()
+            except Exception:
+                pass
+            try:
+                self._param_controls[4].release_parameter()
+            except Exception:
+                pass
+        self._teardown_highpass_button()
+
+    def _setup_highpass_button(self, button, channel_eq):
+        self._teardown_highpass_button()
+        if button is None or channel_eq is None:
+            return
+        hp = get_parameter_by_name(channel_eq, CHANNEL_EQ_EXTRAS['HighpassOn'])
+        if hp is None:
+            return
+        self._highpass_button = button
+        self._highpass_parameter = hp
+        try:
+            button.add_value_listener(self._highpass_value)
+        except Exception:
+            pass
+        try:
+            hp.add_value_listener(self._on_highpass_changed)
+            self._highpass_listener_attached = True
+        except Exception:
+            pass
+        self._update_highpass_led()
+
+    def _teardown_highpass_button(self):
+        if self._highpass_button is not None:
+            try:
+                self._highpass_button.remove_value_listener(self._highpass_value)
+            except Exception:
+                pass
+            self._highpass_button = None
+        if self._highpass_listener_attached and self._highpass_parameter is not None:
+            try:
+                self._highpass_parameter.remove_value_listener(self._on_highpass_changed)
+            except Exception:
+                pass
+        self._highpass_listener_attached = False
+        self._highpass_parameter = None
+
+    def _highpass_value(self, value):
+        if value == 0:
+            return
+        if self._highpass_parameter is None:
+            return
+        try:
+            cur = float(self._highpass_parameter.value)
+            self._highpass_parameter.value = 0.0 if cur > 0 else 1.0
+        except Exception:
+            pass
+
+    def _on_highpass_changed(self):
+        self._update_highpass_led()
+
+    def _update_highpass_led(self):
+        if self._highpass_button is None or self._highpass_parameter is None:
+            return
+        try:
+            if float(self._highpass_parameter.value) > 0:
+                self._highpass_button.turn_on()
             else:
-                self._track_eq.set_track(self._track)
-                cut_buttons = [self._buttons[1], self._buttons[2], self._buttons[3]]
-                self._track_eq.set_cut_buttons(tuple(cut_buttons))
-                self._track_eq.set_gain_controls(tuple([self._param_controls[5], self._param_controls[6], self._param_controls[7]]))
-                self._track_filter.set_track(self._track)
-                self._track_filter.set_filter_controls(self._param_controls[0], self._param_controls[4])
-                ##self._strip = self._mixer._selected_strip
-                self._strip.set_send_controls(tuple([self._param_controls[1], self._param_controls[2], self._param_controls[3]])) 
-                ##pass               
-
-        #self._rebuild_callback()
+                self._highpass_button.turn_off()
+        except Exception:
+            pass
 
 
     def on_track_list_changed(self):
