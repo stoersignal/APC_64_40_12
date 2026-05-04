@@ -607,7 +607,6 @@ class EncoderEQComponent(ControlSurfaceComponent):
         # gain parameter (LP / HP / Notch); a value listener on each band's Filter Type
         # parameter re-evaluates the swap when the user changes type in Live's UI.
         self._eq8_device = None
-        self._eq8_logged = False  # one-shot Log.txt dump of param names on first activation
         self._eq8_filter_type_listeners = []  # parameters we listen to for filter-type changes
 
     def disconnect(self):
@@ -907,18 +906,6 @@ class EncoderEQComponent(ControlSurfaceComponent):
     # --- Eq8 top-row encoder takeover (Scale + 3× band freq + Output) ------
 
     def _setup_eq8_extras(self, eq8_device):
-        # One-shot Log.txt dump — verifies the '1 Q A' / '1 Filter Type A' /
-        # '8 Q A' / '8 Filter Type A' parameter-name guesses introduced for
-        # the gain→Q swap. Same self-verifying pattern as the original Eq8
-        # diagnostic that caught 'Output Gain' vs 'Output' (2484f68).
-        if not self._eq8_logged:
-            self._eq8_logged = True
-            try:
-                self._parent.log_message('[Eq8] params on detected device:')
-                for p in eq8_device.parameters:
-                    self._parent.log_message('[Eq8]   ' + repr(p.name))
-            except Exception as e:
-                self._parent.log_message('[Eq8] params introspection failed: ' + str(e))
         # Release the five encoders we're about to take over so any prior
         # AutoFilter / appointed-device binding is dropped first.
         for idx in (0, 1, 2, 3, 4):
@@ -975,10 +962,6 @@ class EncoderEQComponent(ControlSurfaceComponent):
                 except Exception:
                     ft_value = -1
             no_gain = ft_value in self.EQ8_NO_GAIN_TYPES
-            self._parent.log_message(
-                '[Eq8] band=%d filter_type=%d no_gain=%s → encoder %d %s'
-                % (band, ft_value, no_gain, encoder_idx, 'Q' if no_gain else 'Gain')
-            )
             if not no_gain:
                 # Filter type has gain — bind the encoder to the gain parameter.
                 # (Re-assert even when _track_eq.set_gain_controls already wired

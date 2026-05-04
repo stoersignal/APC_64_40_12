@@ -3,6 +3,12 @@ quick_id: 260504-jt9
 description: Eq8 gain encoders swap to Q on filter types without gain (LP/HP/Notch)
 date: 2026-05-04
 status: complete
+uat_passed: 2026-05-04
+final_commit: <pending>
+commits:
+  - 1eff437 feat — gain↔Q swap based on parameter.is_enabled (didn't fire — Live keeps gain enabled even on no-gain types)
+  - 67fa36d fix — switch to filter-type VALUE (0/1/4/6/7 = no-gain types); per-call diagnostic line for one-shot verification
+  - <pending> docs/cleanup — remove diagnostics (filter-type values verified), mark UAT-passed
 ---
 
 # Quick Task 260504-jt9 — Eq8 gain ↔ Q swap
@@ -51,13 +57,30 @@ grep -n '_eq8_apply_q_overrides\|_eq8_filter_type_listeners\|_on_eq8_filter_type
 grep -n 'Auto Q swap' APC40_User_Manual.md
 ```
 
-## Hardware UAT (still required, in Live)
+## Hardware UAT (passed 2026-05-04)
 
-- Place EQ Eight on a track. Set band 1 to Low Shelf (has gain) — encoder 5 should drive band 1 gain. Switch band 1 to 12 dB Low Cut — encoder 5 should now drive band 1 Q. Open Live's UI mid-knob-twist; values match.
-- Same for band 8: Bell → encoder 7 drives gain; Notch → encoder 7 drives Q.
-- Band 2 (Mid): always Mid Gain on encoder 6, regardless of filter type.
-- Open `Log.txt` after first activation and confirm the params named `'1 Q A'`, `'8 Q A'`, `'1 Filter Type A'`, `'8 Filter Type A'` exist. Paste the `[Eq8]` block if any names need patching.
-- Switch between Eq8 tracks and other-EQ tracks — listeners detach cleanly, no stuck Q binding.
+User confirmed working in Live: encoder 5 drives Low Q on no-gain filter types and Low Gain on gain types; encoder 7 same for High; the swap re-evaluates instantly when the user changes filter type from Live's UI. Band 2 (Mid) stays on Mid Gain throughout.
+
+## Iteration history (notes for future similar tasks)
+
+The first attempt (`1eff437`) used `parameter.is_enabled` on the gain parameter as the gain-vs-Q signal, expecting Live to flip it to `False` on no-gain filter types. **`is_enabled` does not track UI greying for EQ8** — Live keeps the gain parameter `is_enabled = True` even when its UI knob is greyed out, so the conditional always landed on the gain branch and the Q swap never engaged.
+
+The fix (`67fa36d`) reads the filter-type **value** directly:
+
+| filter_type value | Live's UI label | gain? |
+|-------------------|-----------------|-------|
+| 0 | 48 dB Low Cut  | no  |
+| 1 | 12 dB Low Cut  | no  |
+| 2 | Low Shelf      | yes |
+| 3 | Bell           | yes |
+| 4 | Notch          | no  |
+| 5 | High Shelf     | yes |
+| 6 | 12 dB High Cut | no  |
+| 7 | 48 dB High Cut | no  |
+
+`EQ8_NO_GAIN_TYPES = (0, 1, 4, 6, 7)` is the canonical lookup. Verified one-shot via the per-call diagnostic line in `67fa36d`; that diagnostic is removed in the final cleanup commit now that the values are confirmed.
+
+**Reusable lesson:** *don't use `parameter.is_enabled` to detect "this control is currently meaningful in Live's UI".* Live treats `is_enabled` as "API-controllable," which can stay `True` even for parameters Live's UI greys out. For UI-greyed-out detection, find the upstream value (filter type, mode index, etc.) and read it directly.
 
 ## Out of scope
 
