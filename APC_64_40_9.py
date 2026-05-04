@@ -344,6 +344,7 @@ class APC_64_40_9(APC):
             parent=self,
             mixer=self._mixer,
             encoder_modes=self._encoder_modes,
+            session=self._session,
             sliders=tuple(self._sliders),
             mute_buttons=tuple(self._mute_buttons),
             solo_buttons=tuple(self._solo_buttons),

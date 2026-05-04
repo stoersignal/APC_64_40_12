@@ -129,7 +129,7 @@ class _ChainSlotHandler(object):
 class DrumRackModeComponent(ControlSurfaceComponent):
     """ Auto-engaging Drum Rack overlay over the APC40 mixer + encoder strip. """
 
-    def __init__(self, parent, mixer, encoder_modes,
+    def __init__(self, parent, mixer, encoder_modes, session,
                  sliders, mute_buttons, solo_buttons,
                  encoders, encoder_mode_buttons,
                  bank_up_button, bank_down_button,
@@ -145,6 +145,13 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._parent = parent
         self._mixer = mixer
         self._encoder_modes = encoder_modes
+        # Session ref is required for LED/scene-nav ownership transfer:
+        # entering the mode must call session.set_stop_all_clips_button(None) and
+        # (when chains > NUM_STRIPS) session.set_scene_bank_buttons(None, None);
+        # exiting must restore both. Without these, the session keeps writing
+        # the Stop All Clips LED based on clip-playing state and still consumes
+        # bank up/down for scene nav — the symptoms reported in the first UAT.
+        self._session = session
         self._sliders = tuple(sliders)
         self._mute_buttons = tuple(mute_buttons)
         self._solo_buttons = tuple(solo_buttons)
@@ -170,10 +177,19 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._slider_listeners = []         # (slider, callback)
         self._mute_listeners = []           # (button, callback)
         self._solo_listeners = []           # (button, callback)
+        # LED-feedback listeners on chain.mute / chain.solo so the per-slot
+        # Mute/Solo button LEDs follow chain state. The buttons' default
+        # SpecialChanStripComponent LED feeding is suppressed when we call
+        # strip.set_mute_button(None) on _engage — without our own listeners
+        # the LEDs stay dark even though the toggle/momentary handler works.
+        self._chain_mute_listeners = []     # (chain, callback)
+        self._chain_solo_listeners = []     # (chain, callback)
         self._encoder_mode_listeners = []   # (button, callback)
         self._chains_listener_rack = None   # drum_rack (we attached a chains listener to)
         self._track_selection_listener_song = None  # song().view (we attached to)
         self._track_list_listener_song = None       # song() (we attached to)
+        # True while we're holding scene-nav ownership away from session.
+        self._scene_nav_taken = False
 
         # Add cross-cutting listeners that are active in all states. These
         # are passthroughs unless _active and _shift_pressed.
@@ -459,8 +475,19 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             except Exception:
                 pass
 
-        # Bind the captured controls to chain semantics.
+        # Take Stop All Clips LED ownership away from the session so our
+        # turn_on() / turn_off() calls in _refresh_stop_all_led actually stick.
+        # Mirror MatrixModesComponent's variations-mode pattern (line ~282).
+        try:
+            if self._session is not None:
+                self._session.set_stop_all_clips_button(None)
+        except Exception:
+            pass
+
+        # Bind the captured controls to chain semantics. This also computes
+        # whether to take scene-bank ownership (depends on chain count > 8).
         self._refresh_all_chain_bindings()
+        self._refresh_scene_bank_ownership()
 
     def _disengage(self):
         # Release encoders, faders. Slots will revert to mixer-strip ownership
@@ -499,6 +526,20 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             pass
         self._solo_listeners = []
 
+        # Detach chain LED-feedback listeners (chain.mute / chain.solo).
+        for chain, cb in self._chain_mute_listeners:
+            try:
+                chain.remove_mute_listener(cb)
+            except Exception:
+                pass
+        self._chain_mute_listeners = []
+        for chain, cb in self._chain_solo_listeners:
+            try:
+                chain.remove_solo_listener(cb)
+            except Exception:
+                pass
+        self._chain_solo_listeners = []
+
         # Encoders: release any chain-bound parameter so the encoder is
         # available again for EncModeSelectorComponent's per-strip pan/send
         # routing once mixer.update() runs.
@@ -519,6 +560,23 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         # Drop in-flight momentary holds and clear chain refs on slot handlers.
         for h in self._slot_handlers:
             h.set_chain(None)
+
+        # Restore session ownership of Stop All Clips LED + scene-bank buttons
+        # BEFORE mixer.update() so the session's repaint can run on the
+        # next tick.
+        try:
+            if self._session is not None and self._stop_all_button is not None:
+                self._session.set_stop_all_clips_button(self._stop_all_button)
+        except Exception:
+            pass
+        try:
+            if self._session is not None and self._scene_nav_taken:
+                # Restore scene-nav. Note the SessionComponent API is
+                # set_scene_bank_buttons(down, up) — order matters.
+                self._session.set_scene_bank_buttons(self._bank_down_button, self._bank_up_button)
+                self._scene_nav_taken = False
+        except Exception:
+            pass
 
         # Restore SpecialMixerComponent's normal wiring. mixer.update() walks
         # every channel strip and re-asserts volume / mute / solo / pan / send
@@ -587,6 +645,20 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                 pass
         self._solo_listeners = []
 
+        # Tear down chain LED-feedback listeners — we'll re-add them per slot.
+        for chain, cb in self._chain_mute_listeners:
+            try:
+                chain.remove_mute_listener(cb)
+            except Exception:
+                pass
+        self._chain_mute_listeners = []
+        for chain, cb in self._chain_solo_listeners:
+            try:
+                chain.remove_solo_listener(cb)
+            except Exception:
+                pass
+        self._chain_solo_listeners = []
+
         for enc in self._encoders:
             try:
                 enc.release_parameter()
@@ -603,8 +675,16 @@ class DrumRackModeComponent(ControlSurfaceComponent):
 
             if chain is None:
                 # Slot is past the end. Leave fader / encoder / mute / solo
-                # released. LEDs go dark naturally because there's no value
-                # listener to update them.
+                # released and dark-paint the buttons explicitly so any
+                # leftover state from the prior page or strip wiring goes off.
+                try:
+                    self._mute_buttons[slot].send_value(0)
+                except Exception:
+                    pass
+                try:
+                    self._solo_buttons[slot].send_value(0)
+                except Exception:
+                    pass
                 continue
 
             # Fader → chain.mixer_device.volume.
@@ -633,6 +713,31 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                 self._solo_listeners.append((self._solo_buttons[slot], solo_cb))
             except Exception:
                 pass
+
+            # Chain → button LED feedback. add_mute_listener / add_solo_listener
+            # fire whenever chain.mute / chain.solo changes (toggled from the
+            # APC40 OR from Live's own mixer panel). We then repaint the LED
+            # via send_value(127|0) — bypasses set_on_off_values, which plain
+            # ButtonElement doesn't have.
+            def _mk_mute_led(s=slot):
+                return (lambda: self._refresh_mute_led(s))
+            def _mk_solo_led(s=slot):
+                return (lambda: self._refresh_solo_led(s))
+            mute_led_cb = _mk_mute_led()
+            solo_led_cb = _mk_solo_led()
+            try:
+                chain.add_mute_listener(mute_led_cb)
+                self._chain_mute_listeners.append((chain, mute_led_cb))
+            except Exception:
+                pass
+            try:
+                chain.add_solo_listener(solo_led_cb)
+                self._chain_solo_listeners.append((chain, solo_led_cb))
+            except Exception:
+                pass
+            # Initial paint for this slot.
+            self._refresh_mute_led(slot)
+            self._refresh_solo_led(slot)
 
             # Encoder → chain.mixer_device.{panning|sends[0..2]} per sub-mode.
             self._bind_chain_encoder(slot, chain, sub_mode)
@@ -677,14 +782,86 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             pass
 
     def _on_chains_changed(self):
-        # drum_rack.chains changed (chain added or removed). Clamp offset
-        # and re-bind from scratch.
+        # drum_rack.chains changed (chain added or removed). Clamp offset,
+        # re-bind, and re-evaluate scene-bank ownership (chain count crossing
+        # the 8 threshold flips ownership).
         try:
             chains = self._get_chains()
             max_offset = max(0, len(chains) - NUM_STRIPS)
             if self._chain_offset > max_offset:
                 self._chain_offset = max_offset
             self._refresh_all_chain_bindings()
+            self._refresh_scene_bank_ownership()
+        except Exception:
+            pass
+
+    def _refresh_scene_bank_ownership(self):
+        """Take or release scene-bank ownership based on chain count.
+
+        With chains > NUM_STRIPS the user expects bank up/down to scroll
+        through chain pages — so we suppress the SessionComponent's
+        scene-nav listener for the duration. With chains <= NUM_STRIPS we
+        passthrough scene nav (UAT step 6 requirement).
+
+        Toggling here rather than always-take-on-_engage means switching
+        from a 16-pad rack to a 4-pad rack restores scene nav cleanly.
+        """
+        if self._session is None:
+            return
+        try:
+            should_take = self._active and len(self._get_chains()) > NUM_STRIPS
+            if should_take and not self._scene_nav_taken:
+                self._session.set_scene_bank_buttons(None, None)
+                self._scene_nav_taken = True
+            elif (not should_take) and self._scene_nav_taken:
+                # Restore. SessionComponent.set_scene_bank_buttons signature
+                # is (down, up) — match the binding established in __init__
+                # of APC_64_40_9 (line 94).
+                self._session.set_scene_bank_buttons(self._bank_down_button, self._bank_up_button)
+                self._scene_nav_taken = False
+        except Exception:
+            pass
+
+    def _refresh_mute_led(self, slot):
+        """Paint mute LED for a slot. Inverted convention (matches v1.0
+        set_invert_mute_feedback): lit when chain is alive, dark when muted."""
+        if not (0 <= slot < NUM_STRIPS):
+            return
+        button = self._mute_buttons[slot]
+        chain = self._chain_at_slot(slot)
+        if chain is None:
+            try:
+                button.send_value(0)
+            except Exception:
+                pass
+            return
+        try:
+            muted = bool(chain.mute)
+        except Exception:
+            muted = False
+        try:
+            button.send_value(0 if muted else 127)
+        except Exception:
+            pass
+
+    def _refresh_solo_led(self, slot):
+        """Paint solo LED for a slot. Direct convention: lit when soloing."""
+        if not (0 <= slot < NUM_STRIPS):
+            return
+        button = self._solo_buttons[slot]
+        chain = self._chain_at_slot(slot)
+        if chain is None:
+            try:
+                button.send_value(0)
+            except Exception:
+                pass
+            return
+        try:
+            soloed = bool(chain.solo)
+        except Exception:
+            soloed = False
+        try:
+            button.send_value(127 if soloed else 0)
         except Exception:
             pass
 
