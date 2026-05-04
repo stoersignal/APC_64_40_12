@@ -48,6 +48,7 @@ from .EncoderUserModesComponent import EncoderUserModesComponent
 from .ShiftableEncoderSelectorComponent import ShiftableEncoderSelectorComponent
 from .EncoderEQComponent import *
 from .EncoderDeviceComponent import EncoderDeviceComponent
+from .EncoderAutoFilterComponent import EncoderAutoFilterComponent
 from .StepSequencerComponent import StepSequencerComponent
 from .ShiftableZoomingComponent import ShiftableZoomingComponent
 
@@ -303,8 +304,12 @@ class APC_64_40_9(APC):
         self._encoder_modes.set_controls(tuple(self._global_param_controls))
         # Wire top encoders to transport for ramp time editing during Shift+Tap Tempo hold
         self._transport.set_ramp_encoders(tuple(self._global_param_controls))
-        self._encoder_device_modes = EncoderDeviceComponent(self._mixer, self._device, self)
-        self._encoder_device_modes.name = 'Alt_Device_Control_Modes'
+        # TRACK CONTROL MODE 2 (Shift + Send A) — was Alternate Device Mode,
+        # now AutoFilter mode. The variable name `_encoder_device_modes` is
+        # retained because EncoderUserModesComponent / ShiftableEncoderSelectorComponent
+        # reference it; only the underlying class changes.
+        self._encoder_device_modes = EncoderAutoFilterComponent(self._mixer, self)
+        self._encoder_device_modes.name = 'AutoFilter_Control_Modes'
         self._encoder_eq_modes = EncoderEQComponent(self._mixer, self)
         self._encoder_eq_modes.name = 'EQ_Control_Modes'
         global_translation_selector = ChannelTranslationSelector()

@@ -31,7 +31,16 @@ The encoders on the right side of the APC40 (Track Control and Device Control) c
 * **Function**: This combines both the top 8 Track Encoders and the bottom 8 Device Encoders into one massive 16-parameter device control! Track Encoders control Macros 1-8, while Device Encoders control Macros 9-16.
 
 ### Alternate Device & EQ/Filter Smart Control
-* **Shift + Send A**: Sets the top Track Control knobs to act as a *secondary* Device Control independent of the bottom ones.
+* **Shift + Send A**: Engages **Auto Filter Mode**. When the selected track contains Live's **Auto Filter** device, the Track Control 2 × 4 encoder grid + 4 bank buttons re-bind to that device's most-used parameters:
+  * **Top row** (encoders 1 / 2 / 3 / 4): **Drive** / **Env Attack** / **Env Release** / **LFO Rate**.
+  * **Bottom row** (encoders 5 / 6 / 7 / 8): **Frequency** / **Resonance** / **Env Amount** / **LFO Amount**.
+  * **Pan button** → **Filter Slope** cycle (12 → 24 → 48 dB/oct).
+  * **Send A button** → **LFO On/Off** toggle.
+  * **Send B button** → **Filter Type** cycle (LP → HP → BP → Notch → Morph).
+  * **Send C button** → **Side Chain** (Sidechain Mix) on/off toggle.
+  * Bank-button LEDs light when their underlying parameter is non-zero.
+  * Tracks without an Auto Filter device leave all encoders / buttons released and LEDs off (same fail-quiet behavior as EQ Smart Control on tracks without an EQ device).
+  * On first activation the script logs the detected Auto Filter's parameter names to Live's `Log.txt` (lines starting `[AutoFilter]`) so the parameter-name mapping can be verified.
 * **Shift + Send B**: Engages **EQ/Filter Smart Control**. The Track Control knobs automatically map to AutoFilter cutoff/resonance, EQ8 bands, and Sends depending on what's in the track.
   * **Toggle / Momentary kill switches**: in this mode the **Send A / B / C** buttons act as kill switches for **bass / mids / highs** (FilterEQ3 / Audio Effect Rack — or the first three filter bands on EQ8). They have the same dual behavior as Solo / Mute (v1.0): a short tap toggles the kill, a hold longer than 400 ms acts momentary (kill engages on press, reverts on release). Threshold mirrors `LONG_PRESS_DELAY` in `ToggleMomentaryChannelStripComponent.py:8` for consistency.
   * **FilterEQ3 Slope toggle**: when the active EQ device is a **FilterEQ3**, the **Pan button** toggles the device's **Slope** parameter (24 ↔ 48 dB/oct). LED is **on** when 48 dB/oct is engaged, **off** when 24 dB/oct. Pan reverts to its standard "lock to track" role on Eq8 / Audio Effect Rack tracks (Channel EQ tracks use Pan for Highpass on/off — see below).

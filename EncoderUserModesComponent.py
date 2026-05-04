@@ -119,12 +119,10 @@ class EncoderUserModesComponent(ModeSelectorComponent):
                 #control.set_needs_takeover(False)
             self._encoder_modes.set_enabled(False)
             
+            # Mode 2 (Shift + Send A) is now AutoFilter mode (was Alternate Device Mode).
+            # The new EncoderAutoFilterComponent self-cleans via on_enabled_changed —
+            # no _alt_device sub-component to tear down.
             self._encoder_device_modes.set_lock_button(None)
-            self._encoder_device_modes._alt_device.set_bank_nav_buttons(None, None)
-            self._encoder_device_modes._alt_device.set_on_off_button(None)
-            if self._encoder_device_modes._alt_device._parameter_controls != None:
-                for control in self._encoder_device_modes._alt_device._parameter_controls:
-                    control.release_parameter()
             self._encoder_device_modes.set_enabled(False)
             
             self._encoder_eq_modes.set_enabled(False)
