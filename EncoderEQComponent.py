@@ -603,7 +603,12 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._slope_listener_attached = False
         self._filter_eq3_logged = False  # one-shot Log.txt dump of FilterEQ3 param names
         # Eq8 state — top-row encoders (0/1/2/3) + encoder 4 take Scale / band freqs / Output.
+        # Encoders 5 and 7 (Low / High Gain) optionally swap to Q on filter types without a
+        # gain parameter (LP / HP / Notch); a value listener on each band's Filter Type
+        # parameter re-evaluates the swap when the user changes type in Live's UI.
         self._eq8_device = None
+        self._eq8_logged = False  # one-shot Log.txt dump of param names on first activation
+        self._eq8_filter_type_listeners = []  # parameters we listen to for filter-type changes
 
     def disconnect(self):
         self._teardown_channel_eq_extras()
@@ -902,6 +907,18 @@ class EncoderEQComponent(ControlSurfaceComponent):
     # --- Eq8 top-row encoder takeover (Scale + 3× band freq + Output) ------
 
     def _setup_eq8_extras(self, eq8_device):
+        # One-shot Log.txt dump — verifies the '1 Q A' / '1 Filter Type A' /
+        # '8 Q A' / '8 Filter Type A' parameter-name guesses introduced for
+        # the gain→Q swap. Same self-verifying pattern as the original Eq8
+        # diagnostic that caught 'Output Gain' vs 'Output' (2484f68).
+        if not self._eq8_logged:
+            self._eq8_logged = True
+            try:
+                self._parent.log_message('[Eq8] params on detected device:')
+                for p in eq8_device.parameters:
+                    self._parent.log_message('[Eq8]   ' + repr(p.name))
+            except Exception as e:
+                self._parent.log_message('[Eq8] params introspection failed: ' + str(e))
         # Release the five encoders we're about to take over so any prior
         # AutoFilter / appointed-device binding is dropped first.
         for idx in (0, 1, 2, 3, 4):
@@ -926,11 +943,79 @@ class EncoderEQComponent(ControlSurfaceComponent):
                     self._param_controls[idx].connect_to(parameter)
                 except Exception:
                     pass
+        # Bands 1 and 8: if the gain parameter is disabled (filter type has no gain
+        # control — LP / HP / Notch), bind the gain encoder to Q instead.
+        self._eq8_apply_q_overrides(eq8_device)
+        # Listen for filter-type changes so the gain↔Q swap re-evaluates in real time.
+        self._eq8_attach_filter_type_listeners(eq8_device)
+
+    def _eq8_apply_q_overrides(self, eq8_device):
+        # band → encoder index that drives this band's gain (per the EQ_DEVICES['Eq8'].Gains
+        # mapping: bands 1, 2, 8 land on encoders 5, 6, 7 respectively).
+        for band, encoder_idx in ((1, 5), (8, 7)):
+            gain_param = get_parameter_by_name(eq8_device, '%i Gain A' % band)
+            if gain_param is None:
+                continue
+            try:
+                gain_enabled = bool(gain_param.is_enabled)
+            except Exception:
+                gain_enabled = True
+            if gain_enabled:
+                # Filter type has gain — bind the encoder to the gain parameter.
+                # (Even though _track_eq.set_gain_controls already wired this, we
+                # re-assert here so a previous Q override on the same encoder
+                # gets replaced when the user switches to a band type with gain.)
+                try:
+                    self._param_controls[encoder_idx].release_parameter()
+                    self._param_controls[encoder_idx].connect_to(gain_param)
+                except Exception:
+                    pass
+            else:
+                # Filter type has no gain — bind to Q instead.
+                q_param = get_parameter_by_name(eq8_device, '%i Q A' % band)
+                if q_param is not None:
+                    try:
+                        self._param_controls[encoder_idx].release_parameter()
+                        self._param_controls[encoder_idx].connect_to(q_param)
+                    except Exception:
+                        pass
+
+    def _eq8_attach_filter_type_listeners(self, eq8_device):
+        # Detach any existing listeners first, then re-attach against the (possibly
+        # new) device's filter-type parameters.
+        self._eq8_detach_filter_type_listeners()
+        for band in (1, 8):
+            ft_param = get_parameter_by_name(eq8_device, '%i Filter Type A' % band)
+            if ft_param is None or not hasattr(ft_param, 'add_value_listener'):
+                continue
+            try:
+                ft_param.add_value_listener(self._on_eq8_filter_type_changed)
+                self._eq8_filter_type_listeners.append(ft_param)
+            except Exception:
+                pass
+
+    def _eq8_detach_filter_type_listeners(self):
+        for param in self._eq8_filter_type_listeners:
+            if hasattr(param, 'remove_value_listener'):
+                try:
+                    param.remove_value_listener(self._on_eq8_filter_type_changed)
+                except Exception:
+                    pass
+        self._eq8_filter_type_listeners = []
+
+    def _on_eq8_filter_type_changed(self):
+        # User flipped a tracked band's filter type — re-evaluate gain↔Q binding.
+        if self._eq8_device is not None:
+            self._eq8_apply_q_overrides(self._eq8_device)
 
     def _teardown_eq8_extras(self):
+        self._eq8_detach_filter_type_listeners()
         if self._param_controls is None:
             return
-        for idx in (0, 1, 2, 3, 4):
+        # Release encoders 0..4 (extras) AND 5/7 (gain↔Q overrides) so the next
+        # mode/track can re-bind them cleanly. Encoder 6 (Mid Gain) stays on
+        # _track_eq's gain wiring — never overridden.
+        for idx in (0, 1, 2, 3, 4, 5, 7):
             try:
                 self._param_controls[idx].release_parameter()
             except Exception:

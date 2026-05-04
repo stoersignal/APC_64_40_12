@@ -39,6 +39,7 @@ The encoders on the right side of the APC40 (Track Control and Device Control) c
     * **Top row** (encoders 1 / 2 / 3 / 4): **Scale** / **Low Freq** / **Mid Freq** / **High Freq**.
     * **Bottom row** (encoders 5 / 6 / 7 / 8): **Output** / **Low Gain** / **Mid Gain** / **High Gain**.
     * Bands wired: **band 1 (Low)**, **band 2 (Mid)**, **band 8 (High)** — Highs land on the topmost band so the band most musicians touch sits under the rightmost gain knob.
+    * **Auto Q swap**: when band 1 or band 8 is set to a filter type that has no gain (low-cut / high-cut / notch), that band's gain encoder (Low Gain or High Gain) automatically becomes a **Q (resonance)** control instead. Switching the filter type back to a shape with gain (shelf / bell) restores the gain binding. Mid Gain (encoder 7) is always gain — band 2 is not affected.
     * Send A / B / C kill switches toggle bands 1 / 2 / 8 on / off (with toggle-momentary dual behavior, threshold 400 ms).
     * **Pan button** keeps its standard "lock to track" role on Eq8.
   * **Channel EQ (Live 11+)**: when the track contains Live's **Channel EQ** device, the Track Control row remaps automatically:
