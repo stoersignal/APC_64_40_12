@@ -115,23 +115,11 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         # sequence and just verify the length downstream code requires.
         assert ((controls is None) or (len(controls) == 8))
         assert ((buttons is None) or (len(buttons) == 4))
-        try:
-            self._parent.log_message(
-                '[AutoFilter] set_controls_and_buttons: controls=%s buttons=%s'
-                % ('None' if controls is None else 'len=%d' % len(controls),
-                   'None' if buttons is None else 'len=%d' % len(buttons))
-            )
-        except Exception:
-            pass
         self._param_controls = controls
         self._buttons = buttons
         self._update_controls_and_buttons()
 
     def on_enabled_changed(self):
-        try:
-            self._parent.log_message('[AutoFilter] on_enabled_changed: is_enabled=%s' % self.is_enabled())
-        except Exception:
-            pass
         if self.is_enabled():
             self._update_controls_and_buttons()
         else:
@@ -152,6 +140,10 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
 
     # --- Internal --------------------------------------------------------
 
+    # Live 9/10 class_name was 'AutoFilter'; Live 11+ ships a new generation as
+    # 'AutoFilter2'. Accept both so the mode works regardless of Live version.
+    AUTOFILTER_CLASS_NAMES = ('AutoFilter', 'AutoFilter2')
+
     def _detect_autofilter(self):
         if self._track is None:
             return None
@@ -160,36 +152,18 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         except Exception:
             return None
         for device in reversed(devices):
-            if getattr(device, 'class_name', None) == 'AutoFilter':
+            if getattr(device, 'class_name', None) in self.AUTOFILTER_CLASS_NAMES:
                 return device
         return None
 
     def _update_controls_and_buttons(self):
         if self._param_controls is None or self._buttons is None:
-            try:
-                self._parent.log_message('[AutoFilter] _update: param_controls=%s buttons=%s — abort'
-                                         % (self._param_controls, self._buttons))
-            except Exception:
-                pass
             return
         self._teardown_bindings()
         self._track = self.song().view.selected_track
-        try:
-            self._parent.log_message('[AutoFilter] _update: track=%s, devices=%d'
-                                     % (getattr(self._track, 'name', '?'),
-                                        len(list(self._track.devices)) if self._track else 0))
-            for d in (list(self._track.devices) if self._track else []):
-                self._parent.log_message('[AutoFilter]   device class_name=%s name=%s'
-                                         % (getattr(d, 'class_name', '?'), getattr(d, 'name', '?')))
-        except Exception as e:
-            self._parent.log_message('[AutoFilter] _update: track introspection failed: ' + str(e))
         device = self._detect_autofilter()
         self._device = device
         if device is None:
-            try:
-                self._parent.log_message('[AutoFilter] _update: no AutoFilter on track — exiting (LEDs off)')
-            except Exception:
-                pass
             return  # no AutoFilter on this track — fail quiet, all controls dark
 
         # One-shot Log.txt dump for parameter-name verification (mirrors the

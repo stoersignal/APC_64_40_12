@@ -78,8 +78,12 @@ CHANNEL_EQ_EXTRAS = {
     'MidFreq': 'Mid Freq',
     'HighpassOn': 'Highpass On',
 }
-FILTER_DEVICES = {'AutoFilter': {'Frequency': 'Frequency',
+FILTER_DEVICES = {# Live 9/10 Auto Filter (legacy class). Live 11+ uses AutoFilter2 below.
+                  'AutoFilter': {'Frequency': 'Frequency',
                                  'Resonance': 'Resonance'},
+                  # Live 11+ Auto Filter (rebuilt class, same param names).
+                  'AutoFilter2': {'Frequency': 'Frequency',
+                                  'Resonance': 'Resonance'},
                   'Operator': {'Frequency': 'Filter Freq',
                                'Resonance': 'Filter Res'},
                   'OriginalSimpler': {'Frequency': 'Filter Freq',
