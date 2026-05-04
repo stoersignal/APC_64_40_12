@@ -54,6 +54,7 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._variations_pad_buttons = None
         self._variations_appointed_listener_attached = False
         self._variations_listened_device = None  # device we currently have variation_count/selected_variation_index listeners on
+        self._variations_prev_count = 0  # last seen variation_count — used to detect "newly stored" so the new slot becomes selected
 
         
     def disconnect(self):
@@ -248,10 +249,14 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._variations_pad_buttons = pad_buttons
 
         # Live API listeners — keep LEDs in sync with real-time Live state.
+        # NB: the Live API method is `add_appointed_device_listener` (no
+        # `_changed_`), proven by EncoderDeviceComponent.py:50. The earlier
+        # `_changed_` spelling silently failed the hasattr guard, leaving us
+        # blind to device appointment changes (UAT 2026-05-04).
         song = self.song()
-        if hasattr(song, 'add_appointed_device_changed_listener') and not self._variations_appointed_listener_attached:
+        if hasattr(song, 'add_appointed_device_listener') and not self._variations_appointed_listener_attached:
             try:
-                song.add_appointed_device_changed_listener(self._variations_on_appointed_device_changed)
+                song.add_appointed_device_listener(self._variations_on_appointed_device_changed)
                 self._variations_appointed_listener_attached = True
             except Exception:
                 self._variations_appointed_listener_attached = False
@@ -277,12 +282,13 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._variations_detach_device_listeners()
         if self._variations_appointed_listener_attached:
             song = self.song()
-            if hasattr(song, 'remove_appointed_device_changed_listener'):
+            if hasattr(song, 'remove_appointed_device_listener'):
                 try:
-                    song.remove_appointed_device_changed_listener(self._variations_on_appointed_device_changed)
+                    song.remove_appointed_device_listener(self._variations_on_appointed_device_changed)
                 except Exception:
                     pass
             self._variations_appointed_listener_attached = False
+        self._variations_prev_count = 0
 
 
     def _variations_on_appointed_device_changed(self):
@@ -301,6 +307,7 @@ class MatrixModesComponent(ModeSelectorComponent):
         # builds may not expose the listeners.
         if device is None:
             self._variations_listened_device = None
+            self._variations_prev_count = 0
             return
         if hasattr(device, 'add_variation_count_listener'):
             try:
@@ -313,6 +320,15 @@ class MatrixModesComponent(ModeSelectorComponent):
             except Exception:
                 pass
         self._variations_listened_device = device
+        # Seed prev-count baseline so the first store after binding (or after
+        # appointing a different rack) is correctly recognised as a growth.
+        if hasattr(device, 'variation_count'):
+            try:
+                self._variations_prev_count = int(device.variation_count)
+            except Exception:
+                self._variations_prev_count = 0
+        else:
+            self._variations_prev_count = 0
 
 
     def _variations_detach_device_listeners(self):
@@ -333,8 +349,25 @@ class MatrixModesComponent(ModeSelectorComponent):
 
 
     def _variations_on_variation_count_changed(self):
-        if self._mode_index == 7:
-            self._refresh_variations_leds()
+        if self._mode_index != 7:
+            return
+        # Treat a growth in variation_count as "a new variation was just
+        # stored" and force-select the newest slot. Live's store_variation()
+        # does NOT auto-update selected_variation_index, so without this the
+        # new pad would light green instead of red (UAT 2026-05-04).
+        device = self.song().appointed_device
+        if device is not None and hasattr(device, 'variation_count'):
+            try:
+                new_count = int(device.variation_count)
+            except Exception:
+                new_count = self._variations_prev_count
+            if new_count > self._variations_prev_count and hasattr(device, 'selected_variation_index'):
+                try:
+                    device.selected_variation_index = new_count - 1
+                except Exception:
+                    pass
+            self._variations_prev_count = new_count
+        self._refresh_variations_leds()
 
 
     def _variations_on_selected_index_changed(self):
