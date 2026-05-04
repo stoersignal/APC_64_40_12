@@ -1,0 +1,7 @@
+# Python bytecode caches generated whenever Live (or local pytest) imports the script.
+__pycache__/
+*.pyc
+*.pyo
+
+# Local backups left by editors / past renames.
+*.bak
