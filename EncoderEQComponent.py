@@ -33,8 +33,10 @@ from _Generic.Devices import *
 # so the EQ kill-switch dual behavior feels identical to the v1.0 Solo / Mute one.
 LONG_PRESS_DELAY = 4
 
-EQ_DEVICES = {'Eq8': {'Gains': [ ('%i Gain A' % (index + 1)) for index in range(8) ],
-                      'Cuts': [ ('%i Filter On A' % (index + 1)) for index in range(8) ]},
+EQ_DEVICES = {# Eq8 has 8 bands; we use bands 1, 2, 8 → Low / Mid / High so the Highs
+              # land on the topmost band (last in the spectrum) per UAT 2026-05-04.
+              'Eq8': {'Gains': ['1 Gain A', '2 Gain A', '8 Gain A'],
+                      'Cuts': ['1 Filter On A', '2 Filter On A', '8 Filter On A']},
               'FilterEQ3': {'Gains': ['GainLo','GainMid','GainHi'],
                             'Cuts': ['LowOn','MidOn','HighOn']},
               'AudioEffectGroupDevice': {'Gains': [('Macro %i' % (index + 2)) for index in range(3) ], #last 3 buttons of top row
@@ -45,6 +47,22 @@ EQ_DEVICES = {'Eq8': {'Gains': [ ('%i Gain A' % (index + 1)) for index in range(
               'ChannelEq': {'Gains': ['Low Gain', 'Mid Gain', 'High Gain'],
                             'Cuts': []},
               }
+
+# Eq8 extras — controls that take the top row of the Track Control section
+# (encoders 0/1/2/3) plus encoder 4 (Output, directly below encoder 0):
+#   - Encoder 0 (top-left)         → Scale
+#   - Encoder 1 / 2 / 3 (top row)  → Low / Mid / High band frequency (bands 1, 2, 8)
+#   - Encoder 4 (bottom-left)      → Output
+#   - Encoders 5 / 6 / 7 (bottom)  → Low / Mid / High gain — already wired via EQ_DEVICES['Eq8'].Gains
+# Parameter names are best-effort; on first detection EncoderEQComponent dumps them
+# to Log.txt under '[Eq8]' so they can be verified after one UAT activation.
+EQ8_EXTRAS = {
+    'Scale': 'Scale',
+    'Output': 'Output Gain',
+    'LowFreq': '1 Frequency A',
+    'MidFreq': '2 Frequency A',
+    'HighFreq': '8 Frequency A',
+}
 
 # Channel EQ extras — controls that don't fit the gain/cut shape:
 #   - Encoder 0 ("very first encoder in the first row")    → Mid Freq (the user's "split frequency")
@@ -581,10 +599,14 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._slope_parameter = None
         self._slope_listener_attached = False
         self._filter_eq3_logged = False  # one-shot Log.txt dump of FilterEQ3 param names
+        # Eq8 state — top-row encoders (0/1/2/3) + encoder 4 take Scale / band freqs / Output.
+        self._eq8_device = None
+        self._eq8_logged = False  # one-shot Log.txt dump of Eq8 param names
 
     def disconnect(self):
         self._teardown_channel_eq_extras()
         self._teardown_slope_button()
+        self._teardown_eq8_extras()
         self._param_controls = None
         self._mixer = None
         self._buttons = None
@@ -596,6 +618,7 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._track_eq = None
         self._track_filter = None
         self._channel_eq_device = None
+        self._eq8_device = None
 
     def update(self):
         pass
@@ -626,33 +649,52 @@ class EncoderEQComponent(ControlSurfaceComponent):
             self._param_controls[5], self._param_controls[6], self._param_controls[7]
         ]))
 
-        # Pan-button role hierarchy (per device class on the active EQ):
-        #   ChannelEq  → Highpass on/off  (encoders 0/4 also taken)
-        #   FilterEQ3  → Slope toggle (24 ↔ 48 dB/oct)
-        #   anything   → lock (default — preserves the original behavior)
-        # Always tear down BOTH conditional bindings before deciding which to set up,
+        # Pan-button + encoder role hierarchy (per device class on the active EQ):
+        #   ChannelEq  → encoders 0/4 = Mid Freq / Output, Pan = Highpass
+        #   FilterEQ3  → Pan = Slope toggle (24 ↔ 48 dB/oct), encoders 0/4 = AutoFilter
+        #   Eq8        → encoders 0/1/2/3 = Scale / 3× band Freq, encoder 4 = Output, Pan = lock
+        #   anything   → encoders 0/4 = AutoFilter, Pan = lock (default)
+        # Tear down ALL conditional bindings before deciding which to set up,
         # so switching tracks between device classes leaves no stale listener.
         channel_eq = self._detect_channel_eq()
         if channel_eq is not None:
             self._track_filter.set_track(None)
             self._teardown_channel_eq_extras()
             self._teardown_slope_button()
+            self._teardown_eq8_extras()
             self._channel_eq_device = channel_eq
             self._setup_channel_eq_extras(channel_eq)
             self.set_lock_button(None)
         else:
             self._teardown_channel_eq_extras()
             self._channel_eq_device = None
-            self._track_filter.set_track(self._track)
-            self._track_filter.set_filter_controls(
-                self._param_controls[0], self._param_controls[4]
-            )
             eq_device = getattr(self._track_eq, '_device', None)
-            if eq_device is not None and getattr(eq_device, 'class_name', None) == 'FilterEQ3':
+            eq_class = getattr(eq_device, 'class_name', None) if eq_device is not None else None
+            if eq_class == 'Eq8':
+                # Eq8 takes encoders 0..4. Disable AutoFilter so it doesn't fight for 0/4.
+                self._track_filter.set_track(None)
+                self._teardown_slope_button()
+                self._teardown_eq8_extras()
+                self._eq8_device = eq_device
+                self._setup_eq8_extras(eq_device)
+                self.set_lock_button(self._buttons[0])
+            elif eq_class == 'FilterEQ3':
+                self._track_filter.set_track(self._track)
+                self._track_filter.set_filter_controls(
+                    self._param_controls[0], self._param_controls[4]
+                )
+                self._teardown_eq8_extras()
+                self._eq8_device = None
                 self._teardown_slope_button()
                 self._setup_slope_button(self._buttons[0], eq_device)
                 self.set_lock_button(None)
             else:
+                self._track_filter.set_track(self._track)
+                self._track_filter.set_filter_controls(
+                    self._param_controls[0], self._param_controls[4]
+                )
+                self._teardown_eq8_extras()
+                self._eq8_device = None
                 self._teardown_slope_button()
                 self.set_lock_button(self._buttons[0])
 
@@ -847,6 +889,53 @@ class EncoderEQComponent(ControlSurfaceComponent):
                 self._slope_button.turn_off()
         except Exception:
             pass
+
+    # --- Eq8 top-row encoder takeover (Scale + 3× band freq + Output) ------
+
+    def _setup_eq8_extras(self, eq8_device):
+        # One-shot Log.txt dump — same self-verifying pattern as ChannelEq /
+        # FilterEQ3. Catches param-name mismatches in one UAT round.
+        if not self._eq8_logged:
+            self._eq8_logged = True
+            try:
+                self._parent.log_message('[Eq8] params on detected device:')
+                for p in eq8_device.parameters:
+                    self._parent.log_message('[Eq8]   ' + repr(p.name))
+            except Exception as e:
+                self._parent.log_message('[Eq8] params introspection failed: ' + str(e))
+        # Release the five encoders we're about to take over so any prior
+        # AutoFilter / appointed-device binding is dropped first.
+        for idx in (0, 1, 2, 3, 4):
+            try:
+                self._param_controls[idx].release_parameter()
+            except Exception:
+                pass
+        # Top row of the Track Control 2x4 grid: 0=Scale, 1=LowFreq, 2=MidFreq, 3=HighFreq.
+        # Bottom row: 4=Output (the encoder directly below 0). Encoders 5/6/7 are
+        # already wired to gains via _track_eq.set_gain_controls.
+        connections = (
+            (0, EQ8_EXTRAS['Scale']),
+            (1, EQ8_EXTRAS['LowFreq']),
+            (2, EQ8_EXTRAS['MidFreq']),
+            (3, EQ8_EXTRAS['HighFreq']),
+            (4, EQ8_EXTRAS['Output']),
+        )
+        for idx, param_name in connections:
+            parameter = get_parameter_by_name(eq8_device, param_name)
+            if parameter is not None:
+                try:
+                    self._param_controls[idx].connect_to(parameter)
+                except Exception:
+                    pass
+
+    def _teardown_eq8_extras(self):
+        if self._param_controls is None:
+            return
+        for idx in (0, 1, 2, 3, 4):
+            try:
+                self._param_controls[idx].release_parameter()
+            except Exception:
+                pass
 
 
     def on_track_list_changed(self):

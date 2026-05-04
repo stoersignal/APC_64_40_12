@@ -35,6 +35,12 @@ The encoders on the right side of the APC40 (Track Control and Device Control) c
 * **Shift + Send B**: Engages **EQ/Filter Smart Control**. The Track Control knobs automatically map to AutoFilter cutoff/resonance, EQ8 bands, and Sends depending on what's in the track.
   * **Toggle / Momentary kill switches**: in this mode the **Send A / B / C** buttons act as kill switches for **bass / mids / highs** (FilterEQ3 / Audio Effect Rack — or the first three filter bands on EQ8). They have the same dual behavior as Solo / Mute (v1.0): a short tap toggles the kill, a hold longer than 400 ms acts momentary (kill engages on press, reverts on release). Threshold mirrors `LONG_PRESS_DELAY` in `ToggleMomentaryChannelStripComponent.py:8` for consistency.
   * **FilterEQ3 Slope toggle**: when the active EQ device is a **FilterEQ3**, the **Pan button** toggles the device's **Slope** parameter (24 ↔ 48 dB/oct). LED is **on** when 48 dB/oct is engaged, **off** when 24 dB/oct. Pan reverts to its standard "lock to track" role on Eq8 / Audio Effect Rack tracks (Channel EQ tracks use Pan for Highpass on/off — see below).
+  * **EQ Eight (Eq8)**: when the active EQ device is **EQ Eight**, the Track Control section's 2 × 4 encoder grid is laid out as:
+    * **Top row** (encoders 1 / 2 / 3 / 4): **Scale** / **Low Freq** / **Mid Freq** / **High Freq**.
+    * **Bottom row** (encoders 5 / 6 / 7 / 8): **Output** / **Low Gain** / **Mid Gain** / **High Gain**.
+    * Bands wired: **band 1 (Low)**, **band 2 (Mid)**, **band 8 (High)** — Highs land on the topmost band so the band most musicians touch sits under the rightmost gain knob.
+    * Send A / B / C kill switches toggle bands 1 / 2 / 8 on / off (with toggle-momentary dual behavior, threshold 400 ms).
+    * **Pan button** keeps its standard "lock to track" role on Eq8.
   * **Channel EQ (Live 11+)**: when the track contains Live's **Channel EQ** device, the Track Control row remaps automatically:
     * **Encoder 1** (first knob) → **Mid Freq** (split / sweep frequency).
     * **Encoder 5** (the knob to the left of the band gains) → **Output** (output trim).
