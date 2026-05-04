@@ -55,11 +55,13 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._variations_appointed_listener_attached = False
         self._variations_listened_device = None  # device we currently have variation_count/selected_variation_index listeners on
         self._variations_prev_count = 0  # last seen variation_count — used to detect "newly stored" so the new slot becomes selected
+        self._variations_stop_all_button = None  # Stop All Clips taken over for randomize_macros while in this mode
         # Global Variations Mode state (matrix mode 6) — per-track first-rack-with-variations cockpit.
         self._global_var_pad_buttons = None  # flat 5x8 list while active
         self._global_var_scene_buttons = None  # 5 scene-launch buttons while active
         self._global_var_bank_up_button = None
         self._global_var_bank_down_button = None
+        self._global_var_stop_all_button = None  # Stop All Clips taken over for randomize_macros while in this mode
         self._global_var_bank_offset = 0
         self._global_var_track_racks = []  # 8 entries: (track, rack_or_None) per column
         self._global_var_listened_tracks = []
@@ -275,6 +277,15 @@ class MatrixModesComponent(ModeSelectorComponent):
                 self._variations_appointed_listener_attached = False
         self._variations_attach_device_listeners(song.appointed_device)
 
+        # Take over Stop All Clips for randomize_macros on the appointed device.
+        try:
+            self._session.set_stop_all_clips_button(None)
+        except Exception:
+            pass
+        stop_all = self._parent._stop_all_button
+        stop_all.add_value_listener(self._variations_stop_all_value)
+        self._variations_stop_all_button = stop_all
+
         self._session.set_enabled(True)
         self._session.set_show_highlight(True)
         self._refresh_variations_leds()
@@ -302,6 +313,17 @@ class MatrixModesComponent(ModeSelectorComponent):
                     pass
             self._variations_appointed_listener_attached = False
         self._variations_prev_count = 0
+        # Release Stop All Clips back to the session.
+        if self._variations_stop_all_button is not None:
+            try:
+                self._variations_stop_all_button.remove_value_listener(self._variations_stop_all_value)
+            except Exception:
+                pass
+            self._variations_stop_all_button = None
+        try:
+            self._session.set_stop_all_clips_button(self._parent._stop_all_button)
+        except Exception:
+            pass
 
 
     def _variations_on_appointed_device_changed(self):
@@ -451,6 +473,18 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._refresh_variations_leds()
 
 
+    def _variations_stop_all_value(self, value):
+        if not self.is_enabled() or value == 0:
+            return
+        device = self.song().appointed_device
+        if device is None or not hasattr(device, 'randomize_macros'):
+            return
+        try:
+            device.randomize_macros()
+        except Exception:
+            return
+
+
     # --- Global Variations Mode (matrix slot 6) ------------------------------
     # Per-track variations cockpit: each grid column shows the variations of
     # the first device with variation_count > 0 on the visible track at that
@@ -512,6 +546,15 @@ class MatrixModesComponent(ModeSelectorComponent):
         down_button.add_value_listener(self._global_var_bank_down_value)
         self._global_var_bank_up_button = up_button
         self._global_var_bank_down_button = down_button
+
+        # Take over Stop All Clips for randomize_macros across every column's rack.
+        try:
+            self._session.set_stop_all_clips_button(None)
+        except Exception:
+            pass
+        stop_all = self._parent._stop_all_button
+        stop_all.add_value_listener(self._global_var_stop_all_value)
+        self._global_var_stop_all_button = stop_all
 
         self._global_var_bank_offset = 0
 
@@ -581,6 +624,17 @@ class MatrixModesComponent(ModeSelectorComponent):
             except Exception:
                 pass
             self._global_var_bank_down_button = None
+        # Release Stop All Clips back to the session.
+        if self._global_var_stop_all_button is not None:
+            try:
+                self._global_var_stop_all_button.remove_value_listener(self._global_var_stop_all_value)
+            except Exception:
+                pass
+            self._global_var_stop_all_button = None
+        try:
+            self._session.set_stop_all_clips_button(self._parent._stop_all_button)
+        except Exception:
+            pass
         # Restore the session's scene-bank wiring (down=down_button, up=up_button)
         # so subsequent modes get back their scene-paging behavior.
         try:
@@ -863,6 +917,18 @@ class MatrixModesComponent(ModeSelectorComponent):
             return
         self._global_var_bank_offset += 1
         self._global_var_refresh_leds()
+
+
+    def _global_var_stop_all_value(self, value):
+        if not self.is_enabled() or value == 0:
+            return
+        for (_track, rack) in self._global_var_track_racks:
+            if rack is None or not hasattr(rack, 'randomize_macros'):
+                continue
+            try:
+                rack.randomize_macros()
+            except Exception:
+                continue
 
 
 # local variables:

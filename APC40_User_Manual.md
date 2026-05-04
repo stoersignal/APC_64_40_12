@@ -62,6 +62,7 @@ The classic APC40 mode. Grid launches clips.
 * **Trigger one variation**: Press the pad — sets `selected_variation_index` and recalls instantly on that column's rack only.
 * **Trigger across all tracks**: Press a **Scene Launch** button. Scene 1 recalls row 1 across every column that has a variation at that row; tracks without that variation are skipped silently. Scene LED lights green when at least one column has a stored variation at that row.
 * **Scroll past 5 variations**: Use **Bank Select ↑ / ↓** to slide the visible window up/down. The same offset is applied to every column.
+* **Randomize macros (every column at once)**: Press **Stop All Clips** — calls `device.randomize_macros()` on every column's rack simultaneously. (No-op on columns without a rack.)
 * **Track Stop row**: keeps its default clip-stop function in this mode.
 * **Storing variations**: still on **Shift + Tap Tempo** (it acts on the appointed device, not necessarily this column's rack — appoint the rack first via the blue-hand icon or **Shift + Nudge Back**).
 
@@ -73,6 +74,7 @@ The classic APC40 mode. Grid launches clips.
   * **Off pad** — slot is empty (or no Rack appointed).
 * **Trigger a variation**: Press the pad. Sets `selected_variation_index` and recalls instantly. (For ramped/morphed recall, use Tap Tempo as before — this mode is for fast pad triggering.)
 * **Real-time LED refresh**: LEDs follow Live in real time — adding a new variation via **Shift + Tap Tempo** (or in Live's UI) lights up the next green pad immediately; switching the selected variation moves the red pad.
+* **Randomize the appointed rack's macros**: Press **Stop All Clips** — calls `device.randomize_macros()` on the appointed device. Combine with Shift + Tap Tempo to capture the random state as a new variation.
 * **Store a new variation**: use the existing **Shift + Tap Tempo** binding (`ShiftableTransportComponent.py:158-176`). Variations Mode does not provide its own store button — the Track Stop row keeps its default clip-stop function in this mode.
 * **Empty pads**: pressing a pad whose slot is not yet stored does nothing.
 * **No Rack appointed / non-Rack device**: all pad LEDs off, pad presses are no-ops.
