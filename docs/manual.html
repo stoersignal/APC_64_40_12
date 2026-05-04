@@ -1413,15 +1413,13 @@
             'NoteMode4': makeNoteModeDef(4),
             'NoteMode5': makeNoteModeDef(5),
             'Variations': {
-                desc: 'Rack Macro Variations on the appointed device. The 5×8 grid maps row-major to variation indices 0..39 — green = stored slot, red = currently selected, off = empty. Press a stored pad to recall instantly. Track Stop col 1 (yellow) stores a new variation via device.store_variation(). All other Track Stop and Scene Launch buttons are inactive in this mode.',
+                desc: 'Rack Macro Variations on the appointed device. The 5×8 grid maps row-major to variation indices 0..39 — green = stored slot, red = currently selected, off = empty. Press a stored pad to set selected_variation_index and recall instantly. LEDs auto-refresh in real time via add_variation_count_listener / add_selected_variation_index_listener (and add_appointed_device_changed_listener on the song). The Track Stop row keeps its default clip-stop function — store is on Shift+Tap Tempo.',
                 gridColor: (r, c) => '#22c55e',
                 gridLabel: (r, c) => `V${r * 8 + c}`,
-                gridTip: (r, c) => `<strong>Variation slot ${r * 8 + c}</strong>Press to set <code>device.selected_variation_index = ${r * 8 + c}</code> and <code>recall_selected_variation()</code> on the appointed Rack. LED: green = stored, red = currently selected, off = empty (presses on empty slots are no-ops).<div class="related"><em>Source:</em> MatrixModesComponent.py — _set_variations_mode / _variations_pad_value / _refresh_variations_leds.</div>`,
-                stopColor: (c) => c === 0 ? '#eab308' : '#475569',
-                stopLabel: (c) => c === 0 ? 'Store' : '–',
-                stopTip: (c) => c === 0
-                    ? `<strong>Track Stop 1 — Store new Variation</strong>Calls <code>device.store_variation()</code> on the appointed Rack and repaints the grid LEDs. Yellow when a Rack-capable device is appointed.<div class="related"><em>Source:</em> MatrixModesComponent.py — _variations_store_value.</div>`
-                    : `<strong>Track Stop ${c + 1} (Variations Mode)</strong>Reserved — inactive in this mode.`,
+                gridTip: (r, c) => `<strong>Variation slot ${r * 8 + c}</strong>Press to set <code>device.selected_variation_index = ${r * 8 + c}</code> and <code>recall_selected_variation()</code> on the appointed Rack. LED: green = stored, red = currently selected, off = empty (presses on empty slots are no-ops). LEDs follow Live in real time — adding a variation via Shift+Tap Tempo or Live's UI lights the next pad green; switching the selected variation moves the red pad.<div class="related"><em>Source:</em> MatrixModesComponent.py — _set_variations_mode / _variations_pad_value / _refresh_variations_leds + add_variation_count_listener / add_selected_variation_index_listener.</div>`,
+                stopColor: (c) => '#94a3b8',
+                stopLabel: (c) => `Stop<br>${c + 1}`,
+                stopTip: (c) => `<strong>Track Stop ${c + 1} (Variations Mode)</strong>Default clip-stop behavior — Variations Mode does not own this row. To store a new variation, use Shift+Tap Tempo (ShiftableTransportComponent.py:158-176).`,
                 sceneColor: () => '#475569',
                 sceneLabel: (r) => `–`,
                 sceneTip: (r) => `<strong>Scene Launch (Variations Mode)</strong>Inactive in this mode.`,

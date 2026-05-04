@@ -52,8 +52,8 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._parent.set_pad_translations(PAD_TRANSLATIONS) #comment out to remove Drum Rack mapping
         # Variations Mode state (matrix mode 7) — Rack macro variation pads.
         self._variations_pad_buttons = None
-        self._variations_store_button = None
         self._variations_appointed_listener_attached = False
+        self._variations_listened_device = None  # device we currently have variation_count/selected_variation_index listeners on
 
         
     def disconnect(self):
@@ -217,14 +217,23 @@ class MatrixModesComponent(ModeSelectorComponent):
 
     # --- Variations Mode (matrix slot 7) -------------------------------------
     # Rack macro variation pads on the appointed device. 5x8 main grid maps
-    # row-major to variation indices 0..39; Track Stop col 0 stores a new
-    # variation. Mirrors the variation API already used by Tap Tempo / Nudge
-    # (see ShiftableTransportComponent.py:137-176, :359-415).
+    # row-major to variation indices 0..39 — green = stored, red = currently
+    # selected, off = empty slot. Press a stored pad to set
+    # selected_variation_index and recall instantly. The Track Stop row keeps
+    # its default clip-stop function (no store button — store is on
+    # Shift+Tap Tempo, see ShiftableTransportComponent.py:158-176).
+    # Live API: variation_count / selected_variation_index / recall_selected_variation()
+    # mirror the existing Tap-Tempo/Nudge handlers.
 
     def _set_variations_mode(self):
         self._session_zoom.set_zoom_button(None)
         self._session_zoom.set_enabled(False)
-        # Detach clip-launch + clip-stop wiring so pads/stop-row are ours alone.
+        # Detach clip-launch wiring so pads only fire OUR listener. Buttons
+        # stay set_enabled(True) so the framework still routes incoming MIDI
+        # to listeners — see ConfigurableButtonElement.install_connections.
+        # Track Stop row is left at its default clip-stop wiring (set up
+        # earlier in _set_modes); the Variations Mode does not own it.
+        pad_buttons = []
         for scene_index in range(5):
             scene = self._session.scene(scene_index)
             for track_index in range(8):
@@ -232,32 +241,13 @@ class MatrixModesComponent(ModeSelectorComponent):
                 clip_slot.set_launch_button(None)
                 button = self._matrix.get_button(track_index, scene_index)
                 button.use_default_message()
-                button.set_enabled(False)
-                button.set_on_off_values(127, 0)
-        self._session.set_stop_track_clip_buttons(None)
-        for track_index in range(8):
-            button = self._stop_button_matrix.get_button(track_index, 0)
-            button.use_default_message()
-            button.set_enabled(False)
-            button.set_on_off_values(127, 0)
-
-        # Cache flat pad list (row-major) and the store button, then attach
-        # value listeners. Stop-row col 0 is "store"; cols 1..7 are inactive.
-        pad_buttons = []
-        for scene_index in range(5):
-            for track_index in range(8):
-                button = self._matrix.get_button(track_index, scene_index)
+                button.set_enabled(True)
                 pad_buttons.append(button)
         for button in pad_buttons:
             button.add_value_listener(self._variations_pad_value, identify_sender=True)
         self._variations_pad_buttons = pad_buttons
 
-        store_button = self._stop_button_matrix.get_button(0, 0)
-        store_button.add_value_listener(self._variations_store_value, identify_sender=True)
-        self._variations_store_button = store_button
-
-        # Listen for appointed-device changes so LEDs reflect the current Rack.
-        # Guarded by hasattr — the API is present on Live 9+, but we stay safe.
+        # Live API listeners — keep LEDs in sync with real-time Live state.
         song = self.song()
         if hasattr(song, 'add_appointed_device_changed_listener') and not self._variations_appointed_listener_attached:
             try:
@@ -265,6 +255,7 @@ class MatrixModesComponent(ModeSelectorComponent):
                 self._variations_appointed_listener_attached = True
             except Exception:
                 self._variations_appointed_listener_attached = False
+        self._variations_attach_device_listeners(song.appointed_device)
 
         self._session.set_enabled(True)
         self._session.set_show_highlight(True)
@@ -283,16 +274,7 @@ class MatrixModesComponent(ModeSelectorComponent):
                 except Exception:
                     pass
             self._variations_pad_buttons = None
-        if self._variations_store_button is not None:
-            try:
-                self._variations_store_button.remove_value_listener(self._variations_store_value)
-            except Exception:
-                pass
-            try:
-                self._variations_store_button.send_value(0, True)
-            except Exception:
-                pass
-            self._variations_store_button = None
+        self._variations_detach_device_listeners()
         if self._variations_appointed_listener_attached:
             song = self.song()
             if hasattr(song, 'remove_appointed_device_changed_listener'):
@@ -304,6 +286,58 @@ class MatrixModesComponent(ModeSelectorComponent):
 
 
     def _variations_on_appointed_device_changed(self):
+        if self._mode_index != 7:
+            return
+        # Re-bind variation listeners onto the new device, then repaint.
+        self._variations_detach_device_listeners()
+        self._variations_attach_device_listeners(self.song().appointed_device)
+        self._refresh_variations_leds()
+
+
+    def _variations_attach_device_listeners(self, device):
+        # Hook variation_count + selected_variation_index so LEDs follow
+        # Live-side changes (e.g. Shift+Tap Tempo store, Nudge step,
+        # variations added in Live's UI). Guarded by hasattr — older Live
+        # builds may not expose the listeners.
+        if device is None:
+            self._variations_listened_device = None
+            return
+        if hasattr(device, 'add_variation_count_listener'):
+            try:
+                device.add_variation_count_listener(self._variations_on_variation_count_changed)
+            except Exception:
+                pass
+        if hasattr(device, 'add_selected_variation_index_listener'):
+            try:
+                device.add_selected_variation_index_listener(self._variations_on_selected_index_changed)
+            except Exception:
+                pass
+        self._variations_listened_device = device
+
+
+    def _variations_detach_device_listeners(self):
+        device = self._variations_listened_device
+        if device is None:
+            return
+        if hasattr(device, 'remove_variation_count_listener'):
+            try:
+                device.remove_variation_count_listener(self._variations_on_variation_count_changed)
+            except Exception:
+                pass
+        if hasattr(device, 'remove_selected_variation_index_listener'):
+            try:
+                device.remove_selected_variation_index_listener(self._variations_on_selected_index_changed)
+            except Exception:
+                pass
+        self._variations_listened_device = None
+
+
+    def _variations_on_variation_count_changed(self):
+        if self._mode_index == 7:
+            self._refresh_variations_leds()
+
+
+    def _variations_on_selected_index_changed(self):
         if self._mode_index == 7:
             self._refresh_variations_leds()
 
@@ -314,7 +348,6 @@ class MatrixModesComponent(ModeSelectorComponent):
         device = self.song().appointed_device
         count = 0
         selected = -1
-        rack_capable = False
         if device is not None:
             if hasattr(device, 'variation_count'):
                 try:
@@ -326,7 +359,6 @@ class MatrixModesComponent(ModeSelectorComponent):
                     selected = int(device.selected_variation_index)
                 except Exception:
                     selected = -1
-            rack_capable = hasattr(device, 'store_variation')
         for index, button in enumerate(self._variations_pad_buttons):
             if index == selected and 0 <= selected < count:
                 color = 3  # red — currently selected
@@ -337,13 +369,6 @@ class MatrixModesComponent(ModeSelectorComponent):
             try:
                 button.set_on_off_values(color if color != 0 else 127, 0)
                 button.send_value(color, True)
-            except Exception:
-                pass
-        if self._variations_store_button is not None:
-            store_color = 5 if rack_capable else 0  # yellow when Rack can store
-            try:
-                self._variations_store_button.set_on_off_values(store_color if store_color != 0 else 127, 0)
-                self._variations_store_button.send_value(store_color, True)
             except Exception:
                 pass
 
@@ -372,20 +397,9 @@ class MatrixModesComponent(ModeSelectorComponent):
                 device.recall_selected_variation()
         except Exception:
             return
-        self._refresh_variations_leds()
-
-
-    def _variations_store_value(self, value, sender):
-        if not self.is_enabled() or value == 0:
-            return
-        device = self.song().appointed_device
-        if device is None or not hasattr(device, 'store_variation'):
-            return
-        try:
-            device.store_variation()
-        except Exception:
-            return
-        self._refresh_variations_leds()
+        # No explicit refresh — the selected_variation_index listener
+        # (and the variation_count listener for store-side updates) will
+        # repaint via _variations_on_selected_index_changed.
 
 
 # local variables:

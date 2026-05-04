@@ -60,9 +60,10 @@ The classic APC40 mode. Grid launches clips.
   * **Red pad** — variation slot is currently selected.
   * **Off pad** — slot is empty (or no Rack appointed).
 * **Trigger a variation**: Press the pad. Sets `selected_variation_index` and recalls instantly. (For ramped/morphed recall, use Tap Tempo as before — this mode is for fast pad triggering.)
-* **Store a new variation**: Press **Track Stop 1** (yellow LED, leftmost). Calls `device.store_variation()` on the appointed Rack — Live appends a new slot, then the grid repaints to reflect the new slot.
-* **Empty pads**: pressing a pad whose slot is not yet stored does nothing. Use Track Stop 1 to grow the slot list.
-* **No Rack appointed / non-Rack device**: all LEDs off, presses are no-ops.
+* **Real-time LED refresh**: LEDs follow Live in real time — adding a new variation via **Shift + Tap Tempo** (or in Live's UI) lights up the next green pad immediately; switching the selected variation moves the red pad.
+* **Store a new variation**: use the existing **Shift + Tap Tempo** binding (`ShiftableTransportComponent.py:158-176`). Variations Mode does not provide its own store button — the Track Stop row keeps its default clip-stop function in this mode.
+* **Empty pads**: pressing a pad whose slot is not yet stored does nothing.
+* **No Rack appointed / non-Rack device**: all pad LEDs off, pad presses are no-ops.
 
 ---
 
