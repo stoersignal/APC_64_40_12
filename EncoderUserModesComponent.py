@@ -99,7 +99,15 @@ class EncoderUserModesComponent(ModeSelectorComponent):
         assert isinstance(sender, ButtonElement)
         assert (self._modes_buttons.count(sender) == 1)
         if ((value != 0) or (not sender.is_momentary())):
-            self.set_mode(self._modes_buttons.index(sender))    
+            idx = self._modes_buttons.index(sender)
+            # Toggle (quick-260505-tg2): re-pressing the same Shift+<mode-button>
+            # combo while already in that non-default mode exits back to mode 0
+            # (Pan). Mode 0 itself is exempt — Shift+Pan in Pan mode stays a
+            # no-op (set_mode is idempotent on identical index).
+            if idx == self._mode_index and idx != 0:
+                self.set_mode(0)
+            else:
+                self.set_mode(idx)
 
 
     def _set_modes(self):
