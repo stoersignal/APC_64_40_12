@@ -71,44 +71,93 @@ class StatusBarMessenger(object):
     # -- single emit chokepoint ---------------------------------------------
 
     def _emit(self, text):
-        """Send `text` via parent.song().show_message. Records the emission
-        for identical-text dedup. Wrapped in try/except because song() can
-        raise mid-teardown (parent already None'd) or on cold boot before
-        handshake completes."""
+        """Try multiple show_message dispatch strategies until one
+        succeeds. Live 11/12 binding has been seen to reject single-arg
+        Application.show_message(str) with a TText/buttons/enable_markup/
+        show_success_icon C++ signature mismatch; Song.show_message also
+        not always available; explicit-defaults form sometimes satisfies
+        Boost.Python binding. We try in order and log which one wins.
+        Round-2 fix removed once we confirm which path works on this
+        Live build."""
         try:
             if self._parent is None:
                 return
-            # Live 11+ rebound the dispatch: `Application.show_message` is a
-            # MODAL DIALOG ('buttons=OK_BUTTON', 'show_success_icon') — its
-            # C++ signature rejects a plain str (we hit "did not match C++
-            # signature: ... TText text, int buttons, bool enable_markup,
-            # bool show_success_icon" on every call). The TRANSIENT STATUS
-            # BAR API is `Song.show_message(text)` — exactly what we want.
-            # Use song() (inherited from ControlSurface), with a fallback to
-            # application() in case some future Live build flips the API
-            # back.
-            sent = False
+        except Exception:
+            return
+
+        # Each strategy returns (sent_bool, label_str_for_log).
+        strategies = (
+            ('song.show_message(text)',
+             lambda: self._try_song_show_message(text)),
+            ('app.show_message(text)',
+             lambda: self._try_app_show_message_simple(text)),
+            ('app.show_message(text, 0, False, False)',
+             lambda: self._try_app_show_message_full(text)),
+        )
+
+        for label, fn in strategies:
             try:
-                song = self._parent.song()
-                if song is not None:
-                    song.show_message(text)
-                    sent = True
-            except Exception:
-                pass
-            if not sent:
-                try:
-                    app = self._parent.application()
-                    if app is not None:
-                        app.show_message(text)
-                        sent = True
-                except Exception:
-                    pass
-            if sent:
+                ok, exc_text = fn()
+            except Exception as exc:
+                ok, exc_text = False, type(exc).__name__ + ': ' + str(exc)
+            if ok:
                 self._last_text = text
                 self._last_text_ms = self._now_ms()
-        except Exception:
-            # Project idiom: fail quiet rather than crash mid-set.
-            pass
+                # One-shot log per success-strategy so the next UAT round
+                # tells us which form Live 11/12 accepts. Logged ONCE per
+                # text via _last_text comparison so we don't spam.
+                if not getattr(self, '_logged_winner_' + label, False):
+                    try:
+                        self._parent.log_message(
+                            '[StatusBar] WINNER strategy=' + repr(label) +
+                            ' text=' + repr(text))
+                    except Exception:
+                        pass
+                    setattr(self, '_logged_winner_' + label, True)
+                return
+            else:
+                if not getattr(self, '_logged_loser_' + label, False):
+                    try:
+                        self._parent.log_message(
+                            '[StatusBar] FAIL strategy=' + repr(label) +
+                            ' err=' + repr(exc_text))
+                    except Exception:
+                        pass
+                    setattr(self, '_logged_loser_' + label, True)
+        # All strategies failed -- fail quiet.
+
+    def _try_song_show_message(self, text):
+        try:
+            song = self._parent.song()
+            if song is None:
+                return False, 'song() is None'
+            song.show_message(text)
+            return True, None
+        except Exception as exc:
+            return False, type(exc).__name__ + ': ' + str(exc)
+
+    def _try_app_show_message_simple(self, text):
+        try:
+            app = self._parent.application()
+            if app is None:
+                return False, 'application() is None'
+            app.show_message(text)
+            return True, None
+        except Exception as exc:
+            return False, type(exc).__name__ + ': ' + str(exc)
+
+    def _try_app_show_message_full(self, text):
+        try:
+            app = self._parent.application()
+            if app is None:
+                return False, 'application() is None'
+            # Match the C++ signature exactly: text, buttons, enable_markup,
+            # show_success_icon. The first error message hinted that
+            # Boost.Python isn't auto-filling defaults on this build.
+            app.show_message(text, 0, False, False)
+            return True, None
+        except Exception as exc:
+            return False, type(exc).__name__ + ': ' + str(exc)
 
     def _check_dedup(self, text):
         """Return True if `text` should be dropped due to identical-text
