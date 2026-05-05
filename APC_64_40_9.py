@@ -152,6 +152,16 @@ class APC_64_40_9(APC):
         is_momentary = True
         self._mixer = SpecialMixerComponent(self, 8)
         self._mixer.name = 'Mixer'
+        # Inject the status-bar messenger into every channel strip
+        # (quick-260505-sb9 Task 3). SpecialChanStripComponent uses this
+        # to attach hardware-side value listeners that emit parameter-
+        # value status messages on APC40 fader / encoder moves -- only
+        # APC40-driven moves message; Live-UI drags stay silent.
+        for i in range(8):
+            try:
+                self._mixer.channel_strip(i).set_messenger(self._status_messenger)
+            except Exception:
+                pass
         self._mixer.master_strip().name = 'Master_Channel_Strip'
         master_select_button = ButtonElement(is_momentary, MIDI_NOTE_TYPE, 0, 80)
         master_select_button.name = 'Master_Select_Button'

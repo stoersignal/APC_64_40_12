@@ -190,6 +190,13 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._slider_listeners = []         # (slider, callback)
         self._mute_listeners = []           # (button, callback)
         self._solo_listeners = []           # (button, callback)
+        # Param-value status-message listeners on hardware controls
+        # (quick-260505-sb9 Task 3). Each entry: (control, callback).
+        # Built per-slot in _refresh_all_chain_bindings; torn down in
+        # _disengage along with the other slot listeners. Hooks the
+        # HARDWARE control (slider / encoder), NOT the param -- so only
+        # APC40-driven moves message; Live-UI moves stay silent.
+        self._param_message_listeners = []
         # LED-feedback listeners on chain.mute / chain.solo so the per-slot
         # Mute/Solo button LEDs follow chain state. The buttons' default
         # SpecialChanStripComponent LED feeding is suppressed when we call
@@ -547,6 +554,17 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             pass
         self._solo_listeners = []
 
+        # Tear down hardware-side param-message listeners (quick-260505-sb9).
+        # Mirror the slider/mute/solo teardown ordering -- before the
+        # release_parameter calls so a stale listener can't fire one
+        # last time on a half-disconnected control.
+        for ctrl, cb in self._param_message_listeners:
+            try:
+                ctrl.remove_value_listener(cb)
+            except Exception:
+                pass
+        self._param_message_listeners = []
+
         # Detach chain LED-feedback listeners (chain.mute / chain.solo).
         for chain, cb in self._chain_mute_listeners:
             try:
@@ -695,6 +713,16 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                 pass
         self._chain_solo_listeners = []
 
+        # Tear down hardware-side param-message listeners (quick-260505-sb9).
+        # Re-built below once per active slot; orphaning these is the
+        # primary correctness risk of this whole feature.
+        for ctrl, cb in self._param_message_listeners:
+            try:
+                ctrl.remove_value_listener(cb)
+            except Exception:
+                pass
+        self._param_message_listeners = []
+
         for enc in self._encoders:
             try:
                 enc.release_parameter()
@@ -728,6 +756,13 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                 vol = chain.mixer_device.volume
                 if vol is not None:
                     self._sliders[slot].connect_to(vol)
+                    # Status-bar param-message listener on the slider
+                    # (quick-260505-sb9). Hooks HARDWARE-side so only
+                    # APC40 fader moves emit; Live-UI volume drags stay
+                    # silent. param_provider returns the param fresh at
+                    # fire-time so a later rebind on the same slot is
+                    # picked up automatically.
+                    self._attach_param_message_listener(self._sliders[slot], vol)
             except Exception:
                 pass
 
@@ -814,6 +849,22 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             return
         try:
             self._encoders[slot].connect_to(param)
+            # Status-bar param-message listener on the encoder (quick-260505-sb9).
+            self._attach_param_message_listener(self._encoders[slot], param)
+        except Exception:
+            pass
+
+    def _attach_param_message_listener(self, control, param):
+        """Attach a hardware-side value listener on `control` that emits
+        a status-bar message reading param's str_for_value at fire-time.
+        Bookkept in self._param_message_listeners for clean teardown.
+        Wraps the framework call in try/except per project idiom."""
+        if self._messenger is None or control is None or param is None:
+            return
+        try:
+            cb = self._messenger.make_hardware_value_callback(lambda p=param: p)
+            control.add_value_listener(cb)
+            self._param_message_listeners.append((control, cb))
         except Exception:
             pass
 
@@ -890,6 +941,14 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             button.send_value(0 if muted else 127)
         except Exception:
             pass
+        # Status-bar feedback (quick-260505-sb9). Cold-start silence + dedup
+        # in the messenger ensures script-load LED paints don't spam the user.
+        if self._messenger is not None:
+            try:
+                nm = getattr(chain, 'name', None) or '?'
+                self._messenger.show_event(nm + ' mute: ' + ('on' if muted else 'off'))
+            except Exception:
+                pass
 
     def _refresh_solo_led(self, slot):
         """Paint solo LED for a slot. Direct convention: lit when soloing."""
@@ -911,6 +970,12 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             button.send_value(127 if soloed else 0)
         except Exception:
             pass
+        if self._messenger is not None:
+            try:
+                nm = getattr(chain, 'name', None) or '?'
+                self._messenger.show_event(nm + ' solo: ' + ('on' if soloed else 'off'))
+            except Exception:
+                pass
 
     def _on_encoder_sub_mode_change(self, value):
         # Triggered on every press/release of the four encoder mode buttons.

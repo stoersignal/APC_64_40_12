@@ -601,6 +601,12 @@ class EncoderEQComponent(ControlSurfaceComponent):
         # active device so the messenger fires once per real transition.
         self._messenger = messenger
         self._last_active_eq_device = None
+        # Hardware-side param-message listeners (quick-260505-sb9 Task 3).
+        # Each entry: (control, callback). Built in _setup_*_extras /
+        # _setup_eq8_extras / _track_filter binding paths; torn down at the
+        # head of _update_controls_and_buttons (full-rebuild model) and in
+        # disconnect.
+        self._param_message_listeners = []
         self._track_eq = SpecialTrackEQComponent(parent)
         self._track_filter = SpecialTrackFilterComponent(parent)
         # Channel EQ (Live 11+) state — extras that don't fit the gain/cut shape.
@@ -621,6 +627,10 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._eq8_filter_type_listeners = []  # parameters we listen to for filter-type changes
 
     def disconnect(self):
+        # Hardware-side param-message listeners (quick-260505-sb9).
+        # Tear down BEFORE the framework teardowns to avoid stale fires
+        # against half-disconnected encoders.
+        self._teardown_param_message_listeners()
         self._teardown_channel_eq_extras()
         self._teardown_slope_button()
         self._teardown_eq8_extras()
@@ -657,6 +667,10 @@ class EncoderEQComponent(ControlSurfaceComponent):
     def _update_controls_and_buttons(self):
         if self._param_controls is None or self._buttons is None:
             return
+        # Tear down hardware-side param-message listeners FIRST so the
+        # full-rebuild path below can re-attach against the new bindings
+        # without orphaning the old ones (quick-260505-sb9).
+        self._teardown_param_message_listeners()
         if self._is_locked != True:
             self._track = self.song().view.selected_track
 
@@ -747,6 +761,29 @@ class EncoderEQComponent(ControlSurfaceComponent):
                 ]))
 
 
+    # --- Status-bar param-message wiring (quick-260505-sb9) --------------
+
+    def _attach_param_message_listener(self, control, param):
+        """Hook a hardware-side value listener on `control`. See
+        DrumRackModeComponent / EncoderAutoFilterComponent for the
+        identical pattern."""
+        if self._messenger is None or control is None or param is None:
+            return
+        try:
+            cb = self._messenger.make_hardware_value_callback(lambda p=param: p)
+            control.add_value_listener(cb)
+            self._param_message_listeners.append((control, cb))
+        except Exception:
+            pass
+
+    def _teardown_param_message_listeners(self):
+        for ctrl, cb in self._param_message_listeners:
+            try:
+                ctrl.remove_value_listener(cb)
+            except Exception:
+                pass
+        self._param_message_listeners = []
+
     # --- Channel EQ helpers (Live 11+) -----------------------------------
 
     def _detect_channel_eq(self):
@@ -774,12 +811,14 @@ class EncoderEQComponent(ControlSurfaceComponent):
         if midfreq is not None:
             try:
                 self._param_controls[0].connect_to(midfreq)
+                self._attach_param_message_listener(self._param_controls[0], midfreq)
             except Exception:
                 pass
         output = get_parameter_by_name(channel_eq, CHANNEL_EQ_EXTRAS['Output'])
         if output is not None:
             try:
                 self._param_controls[4].connect_to(output)
+                self._attach_param_message_listener(self._param_controls[4], output)
             except Exception:
                 pass
         self._setup_highpass_button(self._buttons[0], channel_eq)
@@ -841,6 +880,13 @@ class EncoderEQComponent(ControlSurfaceComponent):
             self._highpass_parameter.value = 0.0 if cur > 0 else 1.0
         except Exception:
             pass
+        # Status-bar feedback (quick-260505-sb9). Read post-toggle value.
+        if self._messenger is not None:
+            try:
+                on = float(self._highpass_parameter.value) > 0
+                self._messenger.show_event('Highpass: ' + ('on' if on else 'off'))
+            except Exception:
+                pass
 
     def _on_highpass_changed(self):
         self._update_highpass_led()
@@ -914,6 +960,14 @@ class EncoderEQComponent(ControlSurfaceComponent):
             self._slope_parameter.value = 0.0 if cur > 0 else 1.0
         except Exception:
             pass
+        # Status-bar feedback (quick-260505-sb9). FilterEQ3 slope is a
+        # 24/48 dB/oct toggle -- show the human-readable value, not 0/1.
+        if self._messenger is not None:
+            try:
+                on = float(self._slope_parameter.value) > 0
+                self._messenger.show_event('Slope: ' + ('48 dB/oct' if on else '24 dB/oct'))
+            except Exception:
+                pass
 
     def _on_slope_changed(self):
         self._update_slope_led()
@@ -956,6 +1010,7 @@ class EncoderEQComponent(ControlSurfaceComponent):
             if parameter is not None:
                 try:
                     self._param_controls[idx].connect_to(parameter)
+                    self._attach_param_message_listener(self._param_controls[idx], parameter)
                 except Exception:
                     pass
         # Bands 1 and 8: if the gain parameter is disabled (filter type has no gain
@@ -998,6 +1053,7 @@ class EncoderEQComponent(ControlSurfaceComponent):
                 try:
                     self._param_controls[encoder_idx].release_parameter()
                     self._param_controls[encoder_idx].connect_to(gain_param)
+                    self._attach_param_message_listener(self._param_controls[encoder_idx], gain_param)
                 except Exception:
                     pass
             else:
@@ -1007,6 +1063,7 @@ class EncoderEQComponent(ControlSurfaceComponent):
                     try:
                         self._param_controls[encoder_idx].release_parameter()
                         self._param_controls[encoder_idx].connect_to(q_param)
+                        self._attach_param_message_listener(self._param_controls[encoder_idx], q_param)
                     except Exception:
                         pass
 

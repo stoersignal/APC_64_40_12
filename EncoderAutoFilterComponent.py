@@ -141,6 +141,13 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         # too, but the explicit transition gate keeps the intent clear).
         self._messenger = messenger
         self._last_active_device = None
+        # Hardware-side param-message listeners (quick-260505-sb9 Task 3).
+        # Each entry: (control, callback). Hooks the EncoderElement's
+        # value listener -- fires only on incoming MIDI from the APC40.
+        # Built per encoder in _update_controls_and_buttons + the dynamic
+        # rebind paths (_bind_lfo_rate_encoder / _bind_freq_reso_encoders);
+        # torn down in _teardown_bindings.
+        self._param_message_listeners = []
         # Filter-type listener so encoders 4/5 swap when user picks Vowel / DJ.
         self._filter_type_listener_param = None
         # LFO T Mode listener so encoder 3 swaps among LFO Freq / Time / Rate / 16th.
@@ -165,6 +172,9 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         self._lock_button = None
         self._messenger = None
         self._last_active_device = None
+        # _teardown_bindings already drained _param_message_listeners; null
+        # the list ref so any dangling refs are clearly dead.
+        self._param_message_listeners = []
 
     def update(self):
         pass
@@ -281,6 +291,7 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
             if param is not None:
                 try:
                     self._param_controls[idx].connect_to(param)
+                    self._attach_param_message_listener(self._param_controls[idx], param)
                 except Exception:
                     pass
 
@@ -325,7 +336,49 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
             # Initial LED paint.
             self._refresh_button_led(button, param)
 
+    def _attach_param_message_listener(self, control, param):
+        """Hook a hardware-side value listener on `control` so APC40
+        encoder turns emit a status-bar message reading param's
+        str_for_value at fire-time. Bookkept in
+        self._param_message_listeners; torn down in _teardown_bindings.
+        Uses the messenger's factory so the cb resolves the param at
+        fire-time (correct for dynamic rebinds via filter-type / LFO
+        T Mode listeners). Project idiom: wrap framework calls."""
+        if self._messenger is None or control is None or param is None:
+            return
+        try:
+            cb = self._messenger.make_hardware_value_callback(lambda p=param: p)
+            control.add_value_listener(cb)
+            self._param_message_listeners.append((control, cb))
+        except Exception:
+            pass
+
+    def _detach_param_message_listener(self, control):
+        """Remove any (control, cb) entry whose control matches; used by
+        the dynamic rebind paths (filter-type / LFO-T-Mode) so the new
+        param's listener doesn't stack on top of the old one."""
+        if control is None:
+            return
+        kept = []
+        for ctrl, cb in self._param_message_listeners:
+            if ctrl is control:
+                try:
+                    ctrl.remove_value_listener(cb)
+                except Exception:
+                    pass
+            else:
+                kept.append((ctrl, cb))
+        self._param_message_listeners = kept
+
     def _teardown_bindings(self):
+        # Status-bar param-message listeners (quick-260505-sb9). Tear down
+        # FIRST so a stale listener can't fire on a half-released encoder.
+        for ctrl, cb in self._param_message_listeners:
+            try:
+                ctrl.remove_value_listener(cb)
+            except Exception:
+                pass
+        self._param_message_listeners = []
         # Encoders.
         if self._param_controls is not None:
             for idx in range(8):
@@ -386,15 +439,23 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
                 self._param_controls[idx].release_parameter()
             except Exception:
                 pass
+            # Drop any prior hardware-side message listener on this
+            # encoder before re-binding (quick-260505-sb9). Filter-type
+            # rebinds happen mid-mode without a full _teardown_bindings,
+            # so the targeted scrub here keeps listener bookkeeping
+            # accurate across Vowel / DJ / default switches.
+            self._detach_param_message_listener(self._param_controls[idx])
         freq_param, reso_param = self._resolve_freq_reso_params(device)
         if freq_param is not None:
             try:
                 self._param_controls[4].connect_to(freq_param)
+                self._attach_param_message_listener(self._param_controls[4], freq_param)
             except Exception:
                 pass
         if reso_param is not None:
             try:
                 self._param_controls[5].connect_to(reso_param)
+                self._attach_param_message_listener(self._param_controls[5], reso_param)
             except Exception:
                 pass
 
@@ -473,10 +534,15 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
             self._param_controls[3].release_parameter()
         except Exception:
             pass
+        # Drop any prior hardware-side message listener on encoder 3
+        # before re-binding (quick-260505-sb9). LFO-T-Mode rebinds
+        # happen mid-mode without full teardown.
+        self._detach_param_message_listener(self._param_controls[3])
         rate_param = self._resolve_lfo_rate_param(device)
         if rate_param is not None:
             try:
                 self._param_controls[3].connect_to(rate_param)
+                self._attach_param_message_listener(self._param_controls[3], rate_param)
             except Exception:
                 pass
 
@@ -514,6 +580,16 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
             param.value = 0.0 if cur > 0 else 1.0
         except Exception:
             pass
+        # Status-bar feedback (quick-260505-sb9). Read the parameter's
+        # POST-toggle value so the message reflects the new state.
+        if self._messenger is not None:
+            try:
+                nm = (getattr(param, 'name', None)
+                      or getattr(param, 'original_name', '?'))
+                on = float(param.value) > 0
+                self._messenger.show_event(nm + ': ' + ('on' if on else 'off'))
+            except Exception:
+                pass
 
     def _cycle_param(self, param, value):
         # Step through an enum parameter (Filter Slope, Filter Type) one step
@@ -529,6 +605,21 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
             param.value = float((cur + 1) if cur < top else int(round(float(param.min))))
         except Exception:
             pass
+        # Status-bar feedback (quick-260505-sb9). Look up the new value's
+        # value_items label so the message reads e.g. 'Filter Type: Lowpass'.
+        if self._messenger is not None:
+            try:
+                nm = (getattr(param, 'name', None)
+                      or getattr(param, 'original_name', '?'))
+                items = list(getattr(param, 'value_items', []))
+                idx = int(round(float(param.value)))
+                if 0 <= idx < len(items):
+                    label = str(items[idx])
+                else:
+                    label = str(param.value)
+                self._messenger.show_event(nm + ': ' + label)
+            except Exception:
+                pass
 
     def _refresh_button_led(self, button, param):
         if button is None or param is None:
