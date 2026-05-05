@@ -4,13 +4,13 @@
 
 - ✅ **v1.0 Toggle/Momentary** — Phases 1-3 (shipped 2026-03-31) — [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v1.1 16Macros** — Phases 4-5 (shipped 2026-04-01) — [archive](milestones/v1.1-ROADMAP.md)
-- 🚧 **v1.2 Documentation** — Phase 6 (in progress)
+- ✅ **v1.2 Documentation** — Phase 6 (completed 2026-05-05, ready to ship)
 
-### 🚧 v1.2 Documentation (In Progress)
+### ✅ v1.2 Documentation (Complete)
 
 **Milestone Goal:** Ship a user manual that lets a non-developer install the script and operate every shipped controller feature — including the post-v1.1 rack snapshot, ramp, and lock-to-device behaviors — without reading source code.
 
-- [ ] **Phase 6: Create user manual** — End-user documentation covering installation, controller layout, toggle/momentary model, 16-macro Pan mode, rack snapshots, ramp encoders, lock-to-device, and troubleshooting
+- [x] **Phase 6: Create user manual** — End-user documentation covering installation, controller layout, toggle/momentary model, 16-macro Pan mode, rack snapshots, ramp encoders, lock-to-device, and troubleshooting
 
 ## Phase Details
 

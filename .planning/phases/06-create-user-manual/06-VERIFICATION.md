@@ -1,18 +1,20 @@
 ---
 phase: 06-create-user-manual
 verified: 2026-05-02T11:36:44Z
-status: human_needed
-score: 9/10 must-haves verified (1 warning)
+reverified: 2026-05-05T13:30:00Z
+status: passed
+score: 10/10 must-haves verified
 overrides_applied: 0
 gaps:
   - truth: "Every behavioral tooltip cites a line-precise source-of-truth range that points to the actual implementation"
-    status: partial
-    reason: "4 occurrences of the citation `StepSequencerComponent.py:489-498` for the StepSequencer Follow toggle point to `set_loop_start_buttons` (lines 490-501) instead of `set_follow_button` / `_follow_value` (actual lines 414-432). The function name is named correctly in surrounding text, so a reader can locate it, but the line range is wrong. This is a citation accuracy bug inherited from Plan 04's spec — Plan 04 read_first listed `:414-432` as the correct range but the action template hardcoded `:489-498` and the executor faithfully transcribed it."
+    status: closed
+    closed_by: 49bb1c2 (citation precision fix — 3 occurrences fixed; 4th was collapsed by the e5f067e layout rewrite)
+    reason: "Originally: 4 occurrences of `StepSequencerComponent.py:489-498` for the StepSequencer Follow toggle pointed to `set_loop_start_buttons` instead of `set_follow_button` / `_follow_value` (actual lines 414-432). Inherited from Plan 04's action-template hardcoding `:489-498` while read_first correctly listed `:414-432`."
     artifacts:
       - path: "docs/manual.html"
-        issue: "4 instances of `StepSequencerComponent.py:489-498` (lines 411, 804, 812, 1271) cite the wrong line range for the Follow handler"
-    missing:
-      - "Replace `StepSequencerComponent.py:489-498` with `StepSequencerComponent.py:414-432` (or `:414-432 set_follow_button + _follow_value`) at all 4 occurrences in docs/manual.html"
+        issue: "Was 4 instances of `StepSequencerComponent.py:489-498`; now 3 occurrences updated to `:414-432` (4th was collapsed by e5f067e)"
+    missing: []
+    resolved_at: 2026-05-05T13:25:00Z
 human_verification:
   - test: "Open docs/manual.html in Chrome / Firefox / Safari"
     expected: "Page renders with dark background, header reads 'APC_64_40_11 Interactive Controller Manual', no JS console errors, APC40 hardware layout visible (top encoders, 5x8 clip grid, sliders, transport row), three mode strips above the device with Pan + ClipLaunch initially highlighted"
@@ -45,8 +47,9 @@ human_verification:
 **Phase Goal:** Ship a user manual that lets a non-developer install the script and operate every shipped controller feature without reading source code.
 
 **Verified:** 2026-05-02T11:36:44Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Re-verified:** 2026-05-05T13:30:00Z
+**Status:** passed
+**Re-verification:** Yes — citation precision gap closed at 49bb1c2; user UAT approved layout + spells + INSTALL/TROUBLESHOOTING prose at 06-HUMAN-UAT.md
 
 ## Goal Achievement
 

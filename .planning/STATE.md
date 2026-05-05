@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Documentation
-status: executing
-stopped_at: Phase 6 planning complete — 8 PLAN.md files in .planning/phases/06-create-user-manual/, ROADMAP.md annotated with wave dependencies, all 10 DOC-NN requirements + 18 D-NN decisions covered (or correctly OOS)
-last_updated: "2026-05-05T13:00:00Z"
-last_activity: 2026-05-05 -- Quick task 260505-tg2 (Shift+X mode toggle exit) UAT-passed first round (final commit e67b0a0); ready to resume Phase 6 execution
+status: phase_complete
+stopped_at: Phase 6 (create-user-manual) complete — 8/8 plans + layout-overhaul + spells polish + DOC-09 citation precision fix; user UAT passed 2026-05-05; v1.2 milestone ready to ship
+last_updated: "2026-05-05T13:30:43.654Z"
+last_activity: 2026-05-05 — Phase 6 UAT passed; ready to close v1.2 milestone
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
-  completed_plans: 0
-  percent: 0
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -25,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-05-02)
 
 ## Current Position
 
-Milestone: v1.2 Documentation — **ready to execute** (planned 2026-05-02)
-Phase: 6 (create-user-manual) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 6
-Last activity: 2026-05-05 -- Quick task 260505-tg2 (Shift+X mode toggle exit) UAT-passed first round (final commit e67b0a0)
+Milestone: v1.2 Documentation — **phase complete, ready to ship** (planned 2026-05-02, completed 2026-05-05)
+Phase: 06 (create-user-manual) — COMPLETE
+Plan: 8 of 8 done
+Status: Phase 6 complete; v1.2 ready for milestone close
+Last activity: 2026-05-05 — Phase 6 UAT passed
 
-Progress: [░░░░░░░░░░] 0% of v1.2
+Progress: [██████████] 100% of v1.2
 
 ### v1.2 feature surface to document
 
@@ -49,7 +49,7 @@ Already shipped, now in scope for the manual:
 
 **Velocity:**
 
-- Total plans completed: 0 (v1.1 milestone)
+- Total plans completed: 8 (v1.2 milestone)
 - Average duration: ~5min/plan (v1.0 reference)
 - Total execution time: —
 
@@ -57,7 +57,7 @@ Already shipped, now in scope for the manual:
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 06 | 8 | - | - |
 
 **Recent Trend:**
 
