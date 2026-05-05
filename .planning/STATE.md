@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Documentation
 status: executing
 stopped_at: Phase 6 planning complete — 8 PLAN.md files in .planning/phases/06-create-user-manual/, ROADMAP.md annotated with wave dependencies, all 10 DOC-NN requirements + 18 D-NN decisions covered (or correctly OOS)
-last_updated: "2026-05-05T12:00:00Z"
-last_activity: 2026-05-05 -- Quick task 260505-sb9 (Status Bar Messages) UAT-passed after 4 post-UAT iterations (final commit cb161ec); ready to resume Phase 6 execution
+last_updated: "2026-05-05T13:00:00Z"
+last_activity: 2026-05-05 -- Quick task 260505-tg2 (Shift+X mode toggle exit) UAT-passed first round (final commit e67b0a0); ready to resume Phase 6 execution
 progress:
   total_phases: 1
   completed_phases: 0
@@ -29,7 +29,7 @@ Milestone: v1.2 Documentation — **ready to execute** (planned 2026-05-02)
 Phase: 6 (create-user-manual) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 6
-Last activity: 2026-05-05 -- Quick task 260505-sb9 (Status Bar Messages) UAT-passed after 4 post-UAT iterations (final commit cb161ec)
+Last activity: 2026-05-05 -- Quick task 260505-tg2 (Shift+X mode toggle exit) UAT-passed first round (final commit e67b0a0)
 
 Progress: [░░░░░░░░░░] 0% of v1.2
 
@@ -115,6 +115,7 @@ None yet.
 | 260504-k6p | replace MODE 2 (Alternate Device) with AutoFilter mode | 2026-05-04 | ee7c5ae | [260504-k6p-replace-mode-2-alternate-device-with-aut](./quick/260504-k6p-replace-mode-2-alternate-device-with-aut/) |
 | 260504-m2x | add Drum Rack Mode (auto-engages on drum-rack tracks; faders/mute/solo/encoders + Bank scroll + Shift+Detail-View exit) | 2026-05-05 | fad89f9 | [260504-m2x-add-drum-rack-mode](./quick/260504-m2x-add-drum-rack-mode/) |
 | 260505-sb9 | Status Bar Messages — transient Live status-bar feedback for mode changes, encoder sub-mode flips, snapshot save/recall, lock-to-device, AND every APC40-bound parameter-value change | 2026-05-05 | cb161ec | [260505-sb9-status-bar-messages](./quick/260505-sb9-status-bar-messages/) |
+| 260505-tg2 | Shift+X mode toggle exit — re-pressing Shift+Send-A/B/C while in AutoFilter / EQ / User Mode now exits to Pan (was a no-op, stranding user in custom modes) | 2026-05-05 | e67b0a0 | [260505-tg2-shift-mode-toggle](./quick/260505-tg2-shift-mode-toggle/) |
 
 ## Session Continuity
 
