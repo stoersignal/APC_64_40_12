@@ -976,7 +976,7 @@
 
             // Master-Select — I-03 fix. Plan 04 wires StepSequencer follow
             // override. Source:
-            // StepSequencerComponent.py:489-498 wired in APC_64_40_9.py:190.
+            // StepSequencerComponent.py:414-432 wired in APC_64_40_9.py:190.
             const masterSelect = document.getElementById('master-select');
             if (masterSelect) {
                 addTooltipEvents(masterSelect, () => {
@@ -984,7 +984,7 @@
                     if (def && def.followOverride) {
                         return def.followOverride.tip();
                     }
-                    return `<strong>Master Select</strong>Selects the master track. In StepSequencer mode, becomes the Follow toggle (sequencer view follows the playing clip). Source: StepSequencerComponent.py:489-498 wired in APC_64_40_9.py:190.`;
+                    return `<strong>Master Select</strong>Selects the master track. In StepSequencer mode, becomes the Follow toggle (sequencer view follows the playing clip). Source: StepSequencerComponent.py:414-432 wired in APC_64_40_9.py:190.`;
                 });
             }
 
@@ -1450,7 +1450,7 @@
                 followOverride: {
                     color: '#f97316',
                     label: () => `Follow`,
-                    tip: () => `<strong>Follow toggle</strong>When ON, the sequencer view follows the playing clip's current step automatically. When OFF, the view stays locked to the selected bank page. Toggle by tapping the Master Select button.<div class="related"><em>Source:</em> StepSequencerComponent.py:489-498, wired to master-select-button in APC_64_40_9.py:190.</div>`,
+                    tip: () => `<strong>Follow toggle</strong>When ON, the sequencer view follows the playing clip's current step automatically. When OFF, the view stays locked to the selected bank page. Toggle by tapping the Master Select button.<div class="related"><em>Source:</em> StepSequencerComponent.py:414-432, wired to master-select-button in APC_64_40_9.py:190.</div>`,
                 },
                 velocityHint: 'Velocity buttons (5 levels) are wired to the arm-button row by APC_64_40_9.py:191 (set_velocity_buttons ← arm_buttons). Plan 02 renders the arm row as `.arm-pad` cells; the StepSequencer mode repaint (armOverride) re-tooltips them.',
             },

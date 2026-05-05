@@ -3,12 +3,12 @@ status: partial
 phase: 06-create-user-manual
 source: [06-VERIFICATION.md, user reference image 2026-05-02]
 started: 2026-05-02T11:55:00Z
-updated: 2026-05-02T11:55:00Z
+updated: 2026-05-05T13:25:00Z
 ---
 
 ## Current Test
 
-[awaiting layout overhaul gap plan]
+[awaiting user UAT verdict on rewritten layout (e5f067e) + design-spells polish (1decbdf) + citation precision fix (this commit)]
 
 ## Tests
 
@@ -33,33 +33,27 @@ expected: |
   - DETAIL VIEW / REC QUANTIZATION / MIDI OVERDUB / METRONOME row below
   - PLAY / STOP / REC small cluster bottom-RIGHT
   - Cue Level knob between PADS region and FX region
-result: failed
-
-#### Gap detail
-
-The current build (committed by Plan 06-02 and extended by Plans 03-05) has
-an essentially-inverted layout:
-- Clip grid is in the middle (rows 9-13) instead of top-left (rows 1-5)
-- Solo/Mute/Arm are above the clip grid instead of below it
-- Top + Device encoders are laid out as 1×8 strips in the LEFT column
-  instead of 2×4 grids in the TOP-RIGHT and MID-RIGHT
-- Track Selection row, PAN/Send-A/B/C button row, SELECT cursor pad,
-  Tap Tempo, Nudge buttons, the green "D" button, the Detail View row,
-  and the Cue Level knob are all MISSING from the static HTML
-- Stop All Clips and Crossfader exist but at wrong positions
+result: pending_reverify
+note: |
+  Original Plan 06-02 layout was essentially inverted vs hardware. Closed
+  by direct rewrite at commit e5f067e (2026-05-02) — `grid-template-areas`
+  rebuilt + ~280 lines of hardware regions rewritten. Design-spells polish
+  layered on top at 1decbdf (boot cascade, breathing pulse, pad press lift,
+  tooltip overshoot, idle twinkle, SHIFT triple-click easter egg). User
+  has not yet provided UAT verdict on the rewritten build — re-test
+  required before flipping `result` to `passed`.
 
 debug_session: (none — straightforward layout correction, no investigation needed)
 
 #### Resolution path
 
-This is a buildLayout overhaul of docs/manual.html — the
-`grid-template-areas` declaration (line 94) plus the ~280 lines of static
-hardware-region <div> elements need to be rewritten to match the APC40
-hardware footprint shown in the user's reference image.
+CLOSED via direct rewrite (user chose direct edit over `/gsd-plan-phase 6
+--gaps` for speed). Mode-strip JS data-* contract preserved verbatim;
+6 additive element classes added for missing hardware regions.
 
-Recommended next step: `/gsd-plan-phase 6 --gaps` to scope the overhaul
-as a structured gap-closure plan, then `/gsd-execute-phase 6 --gaps-only`
-to apply it.
+Re-verification required: open the post-e5f067e/1decbdf build of
+`docs/manual.html` in a browser and compare against the user reference
+image from 2026-05-02.
 
 ### 2. docs/apc40-layout.svg matches actual APC40 hardware
 
@@ -99,18 +93,29 @@ note: |
 
 total: 4
 passed: 0
-issues: 1
-pending: 3
+issues: 0
+pending: 4
+pending_reverify: 1
 skipped: 0
 blocked: 0
 
 ## Gaps
 
 - gap_id: layout-mismatch
-  description: docs/manual.html static HTML layout does not match the actual APC40 hardware footprint (per user reference image 2026-05-02)
+  description: docs/manual.html static HTML layout did not match the actual APC40 hardware footprint (per user reference image 2026-05-02)
   severity: high
+  status: closed
+  closed_by: e5f067e (direct rewrite) + 1decbdf (design-spells polish)
   scope: docs/manual.html (line 94 grid-template-areas + ~280 lines of hardware-region static <div> elements) + docs/gen_apc40_layout.py + docs/apc40-layout.svg
   open_questions:
-    - "What is the green 'D' box between Nudge+ and Device Control? (DEVICE LOCK?)"
-    - "What is item '21' in the image? (Crossfader between sliders and master area?)"
-  recommended_path: /gsd-plan-phase 6 --gaps
+    - "What is the green 'D' box between Nudge+ and Device Control? (DEVICE LOCK?) — answered yes during rewrite"
+    - "What is item '21' in the image? (Crossfader between sliders and master area?) — answered yes during rewrite"
+  recommended_path: /gsd-verify-work 6 (after user UAT verdict on rewritten build)
+
+- gap_id: doc-09-citation-precision
+  description: 4 occurrences of `StepSequencerComponent.py:489-498` cited the wrong line range for the Follow toggle handler. Actual handler is at `:414-432` (`set_follow_button` + `_follow_value`).
+  severity: advisory
+  status: closed
+  closed_by: this commit (3 occurrences fixed in docs/manual.html; 4th was collapsed by the e5f067e layout rewrite)
+  scope: docs/manual.html (3× `StepSequencerComponent.py:489-498` → `:414-432`)
+  recommended_path: none — cosmetic citation fix, no further action
