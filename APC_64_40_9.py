@@ -352,7 +352,11 @@ class APC_64_40_9(APC):
             encoder_mode_buttons=tuple(self._global_bank_buttons),
             bank_up_button=self._up_button,
             bank_down_button=self._down_button,
-            stop_all_button=self._stop_all_button,
+            # Indicator + manual exit migrated from Stop All Clips → Detail
+            # View (note 62, channel 0). Stop All Clips LED is hardware-only
+            # on APC40 mk1; Detail View LED is MIDI-addressable. Shift+Detail
+            # View now exits the mode for the current track.
+            detail_view_button=self._device_bank_buttons[4],
             shift_button=self._shift_button,
         )
         self._drum_rack_mode.name = 'Drum_Rack_Mode'

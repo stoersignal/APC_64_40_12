@@ -133,7 +133,7 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                  sliders, mute_buttons, solo_buttons,
                  encoders, encoder_mode_buttons,
                  bank_up_button, bank_down_button,
-                 stop_all_button, shift_button):
+                 detail_view_button, shift_button):
         ControlSurfaceComponent.__init__(self)
         assert isinstance(mixer, MixerComponent)
         assert len(sliders) == NUM_STRIPS
@@ -145,12 +145,13 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._parent = parent
         self._mixer = mixer
         self._encoder_modes = encoder_modes
-        # Session ref is required for LED/scene-nav ownership transfer:
-        # entering the mode must call session.set_stop_all_clips_button(None) and
-        # (when chains > NUM_STRIPS) session.set_scene_bank_buttons(None, None);
-        # exiting must restore both. Without these, the session keeps writing
-        # the Stop All Clips LED based on clip-playing state and still consumes
-        # bank up/down for scene nav — the symptoms reported in the first UAT.
+        # Session ref still needed for scene-bank ownership transfer when
+        # chains > NUM_STRIPS (otherwise session's set_scene_bank_buttons
+        # listener fights ours). Stop-All-Clips LED ownership is no longer
+        # touched — that LED is hardware-only on APC40 mk1 firmware (UAT
+        # confirmed it never lights even when clips play normally), so the
+        # indicator was moved to the Detail View button (which has a
+        # MIDI-addressable LED).
         self._session = session
         self._sliders = tuple(sliders)
         self._mute_buttons = tuple(mute_buttons)
@@ -159,7 +160,13 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._encoder_mode_buttons = tuple(encoder_mode_buttons)
         self._bank_up_button = bank_up_button
         self._bank_down_button = bank_down_button
-        self._stop_all_button = stop_all_button
+        # Indicator + manual-exit combo migrated from Stop All Clips to
+        # Shift + Detail View (note 62, channel 0 — self._device_bank_buttons[4]).
+        # DetailViewCntrlComponent normally drives this LED based on Live's
+        # Detail-view-visible state, but only on visibility change events —
+        # our _on_timer tick re-asserts every Live MIDI loop, so we always
+        # win the race while the mode is active.
+        self._detail_view_button = detail_view_button
         self._shift_button = shift_button
 
         # Mode state.
@@ -250,7 +257,7 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._encoder_mode_buttons = ()
         self._bank_up_button = None
         self._bank_down_button = None
-        self._stop_all_button = None
+        self._detail_view_button = None
         self._shift_button = None
         self._drum_rack = None
 
@@ -298,13 +305,14 @@ class DrumRackModeComponent(ControlSurfaceComponent):
     # ---------- Static listeners (always attached) ------------------------
 
     def _attach_static_listeners(self):
-        # Stop All Clips: passthrough listener — co-exists with the existing
-        # PedaledSessionComponent.set_stop_all_clips_button binding and any
-        # MatrixModesComponent variations-mode override. Only fires its
+        # Detail View button: passthrough listener — co-exists with the
+        # existing DetailViewCntrlComponent.set_detail_toggle_button binding
+        # (DetailViewCntrlComponent gates on `not self._shift_pressed`, so
+        # Shift+DetailView is free for our exit combo). Only fires its
         # exit-this-track action when (_active AND _shift_pressed).
         try:
-            if self._stop_all_button is not None:
-                self._stop_all_button.add_value_listener(self._stop_all_value)
+            if self._detail_view_button is not None:
+                self._detail_view_button.add_value_listener(self._detail_view_value)
         except Exception:
             pass
 
@@ -355,8 +363,8 @@ class DrumRackModeComponent(ControlSurfaceComponent):
 
     def _detach_static_listeners(self):
         try:
-            if self._stop_all_button is not None:
-                self._stop_all_button.remove_value_listener(self._stop_all_value)
+            if self._detail_view_button is not None:
+                self._detail_view_button.remove_value_listener(self._detail_view_value)
         except Exception:
             pass
         try:
@@ -436,7 +444,7 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             if self._active:
                 self._disengage()
 
-        self._refresh_stop_all_led()
+        self._refresh_indicator_led()
 
     # ---------- Engagement / disengagement -------------------------------
 
@@ -474,15 +482,6 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                 strip.set_solo_button(None)
             except Exception:
                 pass
-
-        # Take Stop All Clips LED ownership away from the session so our
-        # turn_on() / turn_off() calls in _refresh_stop_all_led actually stick.
-        # Mirror MatrixModesComponent's variations-mode pattern (line ~282).
-        try:
-            if self._session is not None:
-                self._session.set_stop_all_clips_button(None)
-        except Exception:
-            pass
 
         # Bind the captured controls to chain semantics. This also computes
         # whether to take scene-bank ownership (depends on chain count > 8).
@@ -561,20 +560,25 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         for h in self._slot_handlers:
             h.set_chain(None)
 
-        # Restore session ownership of Stop All Clips LED + scene-bank buttons
-        # BEFORE mixer.update() so the session's repaint can run on the
-        # next tick.
-        try:
-            if self._session is not None and self._stop_all_button is not None:
-                self._session.set_stop_all_clips_button(self._stop_all_button)
-        except Exception:
-            pass
+        # Restore session ownership of scene-bank buttons (Stop All Clips
+        # ownership is no longer touched — that LED is hardware-only on
+        # APC40 mk1; the indicator moved to the Detail View button).
         try:
             if self._session is not None and self._scene_nav_taken:
                 # Restore scene-nav. Note the SessionComponent API is
                 # set_scene_bank_buttons(down, up) — order matters.
                 self._session.set_scene_bank_buttons(self._bank_down_button, self._bank_up_button)
                 self._scene_nav_taken = False
+        except Exception:
+            pass
+
+        # Turn off the Detail View LED. DetailViewCntrlComponent's own
+        # _detail_view_visibility_changed will repaint it on next view-change
+        # event, but we don't want a stale "active" indicator hanging around
+        # after disengage.
+        try:
+            if self._detail_view_button is not None:
+                self._detail_view_button.send_value(0, True)
         except Exception:
             pass
 
@@ -890,11 +894,13 @@ class DrumRackModeComponent(ControlSurfaceComponent):
 
     # ---------- Cross-cutting passthroughs --------------------------------
 
-    def _stop_all_value(self, value):
+    def _detail_view_value(self, value):
         # Passthrough unless mode is active AND user is holding shift AND
         # this is a press-down event. On match, mark current track as exited
-        # and disengage. Variations modes (MatrixModesComponent) use the
-        # same shared listener pattern; we never call set_stop_all_clips_button(None).
+        # and disengage. DetailViewCntrlComponent gates ITS handler on
+        # `not self._shift_pressed`, so a shift-held press is exclusively
+        # ours; an unshifted press is exclusively theirs (toggles Live's
+        # Detail view as before).
         if not self._active:
             return
         if not self._shift_pressed:
@@ -911,7 +917,7 @@ class DrumRackModeComponent(ControlSurfaceComponent):
             self._disengage()
         except Exception:
             pass
-        self._refresh_stop_all_led()
+        self._refresh_indicator_led()
 
     def _bank_up_value(self, value):
         # Passthrough unless mode active AND chains > 8 AND press-down.
@@ -973,7 +979,7 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                 pass
 
     def _shift_value(self, value):
-        # Observer-only: track the modifier state so _stop_all_value can
+        # Observer-only: track the modifier state so _detail_view_value can
         # gate its exit action. NEVER own the shift button.
         self._shift_pressed = (value != 0)
 
@@ -991,35 +997,24 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         if 0 <= slot < len(self._slot_handlers):
             self._slot_handlers[slot].handle_solo(value, self._shift_pressed)
 
-    # ---------- Stop All Clips LED ---------------------------------------
+    # ---------- Detail View indicator LED -------------------------------
 
-    def _refresh_stop_all_led(self):
-        # Round-2 fix used send_value(127, True) — still dark per UAT round 3.
-        # Two remaining theories:
-        #   (T1) APC40 Stop All Clips LED expects velocity 1 (single-color
-        #        LED protocol) rather than 127.
-        #   (T2) Something else periodically repaints the button after we
-        #        write — initial paint lights briefly, then gets cleared.
-        # Address both: send velocity 1, log every paint to Log.txt with a
-        # marker the user can grep for, and rely on _on_timer to re-paint
-        # so a periodic overwrite can't keep us dark.
-        if self._stop_all_button is None:
+    def _refresh_indicator_led(self):
+        # Detail View button (note 62, channel 0). Has a MIDI-addressable
+        # LED — confirmed working via send_value(127, True). Indicator
+        # migrated from Stop All Clips after UAT confirmed Stop All Clips
+        # is hardware-only on APC40 mk1 (LED never lights even from Live's
+        # own writes when clips are playing).
+        # DetailViewCntrlComponent normally drives this LED to follow Live's
+        # Detail-view-visible state, but only fires on visibility change.
+        # Our _on_timer tick re-asserts every Live MIDI loop iteration so
+        # we always win the race while the mode is active.
+        if self._detail_view_button is None:
             return
-        velocity = 1 if self._active else 0
         try:
-            self._parent.log_message(
-                '[DrumRack] _refresh_stop_all_led active=' + repr(self._active) +
-                ' sending velocity=' + repr(velocity))
+            self._detail_view_button.send_value(127 if self._active else 0, True)
         except Exception:
             pass
-        try:
-            self._stop_all_button.send_value(velocity, True)
-        except Exception as exc:
-            try:
-                self._parent.log_message(
-                    '[DrumRack] _refresh_stop_all_led send_value RAISED: ' + str(exc))
-            except Exception:
-                pass
 
     # ---------- One-shot diagnostic dump ---------------------------------
 
@@ -1089,19 +1084,13 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                 h.tick()
         except Exception:
             pass
-        # Periodic LED re-assertion — defeats T2 (some other component's
-        # update() repaints the Stop All Clips LED after our initial write).
-        # We tick at v1.0 cadence (every Live MIDI loop iteration), so the
-        # LED will be re-asserted within one tick of any overwrite. Cost:
-        # one MIDI byte per tick per active mode = negligible.
-        self._refresh_stop_all_led_silent()
-
-    def _refresh_stop_all_led_silent(self):
-        """Like _refresh_stop_all_led but no log_message (called every tick)."""
-        if self._stop_all_button is None:
-            return
+        # Periodic LED re-assertion — DetailViewCntrlComponent only writes
+        # the LED on Live-side Detail-view visibility-change events; our
+        # tick repaint covers any race where the user toggles Detail view
+        # while in Drum Rack Mode. Cost: one MIDI byte per tick = negligible.
         try:
-            self._stop_all_button.send_value(1 if self._active else 0, True)
+            if self._detail_view_button is not None:
+                self._detail_view_button.send_value(127, True)
         except Exception:
             pass
 
