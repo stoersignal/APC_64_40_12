@@ -83,6 +83,11 @@ class EncoderUserModesComponent(ModeSelectorComponent):
                 button.add_value_listener(self._mode_value, identify_sender)
                 self._modes_buttons.append(button)
             assert (self._mode_index in range(self.number_of_modes()))
+            # Quick-260505-lqz: refresh LEDs to reflect current _mode_index
+            # immediately on Shift-press. Without this, the LEDs stay stale
+            # (cumulative from prior _set_modes call) until the user presses
+            # one of the 4 buttons.
+            self._set_modes()
 
 
     def number_of_modes(self):
@@ -113,8 +118,11 @@ class EncoderUserModesComponent(ModeSelectorComponent):
     def _set_modes(self):
         if self.is_enabled():
             assert (self._mode_index in range(self.number_of_modes()))
+            # Quick-260505-lqz: single-active-LED indicator. In default
+            # mode 0 (no Shift-mode active), all 4 LEDs go dark; in modes
+            # 1-3, only the matching Shift+X button lights up.
             for index in range(len(self._modes_buttons)):
-                if (index <= self._mode_index):
+                if self._mode_index != 0 and index == self._mode_index:
                     self._modes_buttons[index].turn_on()
                 else:
                     self._modes_buttons[index].turn_off()
