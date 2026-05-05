@@ -133,7 +133,8 @@ class DrumRackModeComponent(ControlSurfaceComponent):
                  sliders, mute_buttons, solo_buttons,
                  encoders, encoder_mode_buttons,
                  bank_up_button, bank_down_button,
-                 detail_view_button, shift_button):
+                 detail_view_button, shift_button,
+                 messenger=None):
         ControlSurfaceComponent.__init__(self)
         assert isinstance(mixer, MixerComponent)
         assert len(sliders) == NUM_STRIPS
@@ -168,6 +169,11 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         # win the race while the mode is active.
         self._detail_view_button = detail_view_button
         self._shift_button = shift_button
+        # Status-bar messenger (quick-260505-sb9). May be None outside the
+        # main wiring path (e.g. legacy test harnesses) -- every emit site
+        # below guards on `is not None` so the component is fully usable
+        # without it.
+        self._messenger = messenger
 
         # Mode state.
         self._active = False
@@ -260,6 +266,7 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._detail_view_button = None
         self._shift_button = None
         self._drum_rack = None
+        self._messenger = None
 
     def update(self):
         pass
@@ -453,6 +460,17 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._drum_rack = drum_rack
         self._chain_offset = 0
 
+        # Status-bar feedback (quick-260505-sb9). Fire ONCE per real
+        # transition -- _engage is only called from _evaluate_selection
+        # after the should_engage / not _active gate, so this is a true
+        # entry event. Cold-start silence in the messenger drops this
+        # if the script just loaded.
+        if self._messenger is not None:
+            try:
+                self._messenger.show_mode('Drum Rack Mode', True)
+            except Exception:
+                pass
+
         # First-activation diagnostic dump — mirrors EncoderAutoFilterComponent
         # _params_logged. Surfaces the actual class_name + chain count + the
         # parameter list of chain[0].mixer_device, so any name mismatch
@@ -489,6 +507,10 @@ class DrumRackModeComponent(ControlSurfaceComponent):
         self._refresh_scene_bank_ownership()
 
     def _disengage(self):
+        # Capture pre-teardown active flag so the exit message fires only
+        # on a REAL transition (not on a defensive disengage call from a
+        # path that already disengaged).
+        was_active = self._active
         # Release encoders, faders. Slots will revert to mixer-strip ownership
         # after we call mixer.update() below.
         try:
@@ -599,6 +621,16 @@ class DrumRackModeComponent(ControlSurfaceComponent):
 
         self._active = False
         self._drum_rack = None
+
+        # Status-bar feedback (quick-260505-sb9). Fire AFTER the teardown
+        # so a slow remove_value_listener call doesn't delay the user-
+        # visible message; was_active gate ensures we don't message on a
+        # no-op disengage from a not-yet-engaged state.
+        if was_active and self._messenger is not None:
+            try:
+                self._messenger.show_mode('Drum Rack Mode', False)
+            except Exception:
+                pass
 
     # ---------- Chain bindings -------------------------------------------
 

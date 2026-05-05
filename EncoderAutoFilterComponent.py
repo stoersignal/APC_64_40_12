@@ -115,7 +115,7 @@ FILTER_TYPE_PARAM_OVERRIDES = {
 class EncoderAutoFilterComponent(ControlSurfaceComponent):
     """ Encoder mode that maps the 8 Track Control encoders + 4 bank buttons to AutoFilter. """
 
-    def __init__(self, mixer, parent):
+    def __init__(self, mixer, parent, messenger=None):
         ControlSurfaceComponent.__init__(self)
         assert isinstance(mixer, MixerComponent)
         self._mixer = mixer
@@ -131,6 +131,16 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         self._button_bindings = []
         # Per-parameter LED feedback listeners. Each entry: (parameter, callback).
         self._led_listeners = []
+        # Status-bar messenger + transition tracker (quick-260505-sb9).
+        # AutoFilter Mode has no _engage/_disengage path -- it activates
+        # implicitly when _update_controls_and_buttons finds an AutoFilter
+        # device on the selected track. _last_active_device tracks whether
+        # we've already messaged "AutoFilter Mode" for the current device
+        # so flipping a track that has multiple AutoFilters doesn't
+        # spam the bar (the dedup window in the messenger covers that
+        # too, but the explicit transition gate keeps the intent clear).
+        self._messenger = messenger
+        self._last_active_device = None
         # Filter-type listener so encoders 4/5 swap when user picks Vowel / DJ.
         self._filter_type_listener_param = None
         # LFO T Mode listener so encoder 3 swaps among LFO Freq / Time / Rate / 16th.
@@ -153,6 +163,8 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         self._track = None
         self._device = None
         self._lock_button = None
+        self._messenger = None
+        self._last_active_device = None
 
     def update(self):
         pass
@@ -171,6 +183,17 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         if self.is_enabled():
             self._update_controls_and_buttons()
         else:
+            # When the EncoderUserModesComponent disables this sub-mode
+            # (user flips Shift+Send A away to a different shift mode),
+            # treat it as a mode-exit for status-bar purposes if we were
+            # previously messaged-as-active. Mirrors the device-disappear
+            # path in _update_controls_and_buttons.
+            if self._messenger is not None and self._last_active_device is not None:
+                try:
+                    self._messenger.show_mode('AutoFilter Mode', False)
+                except Exception:
+                    pass
+            self._last_active_device = None
             self._teardown_bindings()
 
     def set_lock_button(self, button):
@@ -211,6 +234,25 @@ class EncoderAutoFilterComponent(ControlSurfaceComponent):
         self._track = self.song().view.selected_track
         device = self._detect_autofilter()
         self._device = device
+        # Status-bar feedback (quick-260505-sb9). AutoFilter Mode has no
+        # explicit _engage/_disengage path -- the mode "enters" when an
+        # AutoFilter device first appears under the selected track and
+        # "exits" when it goes away (track switch / device deletion).
+        # Track _last_active_device so the messenger fires once per real
+        # transition; the dedup window in the messenger covers any spurious
+        # double-fires from rapid update calls.
+        if self._messenger is not None:
+            try:
+                if device is not None and self._last_active_device is None:
+                    self._messenger.show_mode('AutoFilter Mode', True)
+                elif device is None and self._last_active_device is not None:
+                    self._messenger.show_mode('AutoFilter Mode', False)
+                # device is not None and last_active is also not None ->
+                # may be the same or different AutoFilter; we don't message
+                # mid-stream device swaps within the mode (would be noisy).
+            except Exception:
+                pass
+        self._last_active_device = device
         if device is None:
             return  # no AutoFilter on this track — fail quiet, all controls dark
         # Self-verifying param dump on first detection (sister-component pattern).

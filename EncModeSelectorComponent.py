@@ -13,7 +13,12 @@ class EncModeSelectorComponent(ModeSelectorComponent):
     ' Class that reassigns encoders on the AxiomPro to different mixer functions '
     __module__ = __name__
 
-    def __init__(self, mixer):
+    # Encoder sub-mode index → human-readable label for status-bar feedback
+    # (quick-260505-sb9 D-06). Module-level tuple so both _mode_value and
+    # _on_timer (Send mode revert path) can read the same labels.
+    _MODE_NAMES = ('Pan', 'Send A', 'Send B', 'Send C')
+
+    def __init__(self, mixer, messenger=None):
         assert isinstance(mixer, MixerComponent)
         ModeSelectorComponent.__init__(self)
         self._controls = None
@@ -29,6 +34,9 @@ class EncModeSelectorComponent(ModeSelectorComponent):
         self._device_component = None
         self._device_controls = None
         self._bank_nav_buttons = None
+        # Status-bar messenger (quick-260505-sb9). Emit on every real
+        # mode transition (Pan / Send A / Send B / Send C press).
+        self._messenger = messenger
 
 
     def disconnect(self):
@@ -44,6 +52,7 @@ class EncModeSelectorComponent(ModeSelectorComponent):
         self._bank_nav_buttons = None
         self._send_ticks_delay = -1
         self._send_momentary_active = False
+        self._messenger = None
         self._unregister_timer_callback(self._on_timer) #added
         ModeSelectorComponent.disconnect(self)
 
@@ -88,8 +97,26 @@ class EncModeSelectorComponent(ModeSelectorComponent):
             assert isinstance(sender, ButtonElement)
             assert (self._modes_buttons.count(sender) == 1)
             index = self._modes_buttons.index(sender)
+            # Capture pre-set_mode index so the status-bar transition gate
+            # can compare. set_mode is idempotent on identical index, so a
+            # repeat-press of the same mode button does NOT update _mode_index;
+            # the dedup window in the messenger covers any user-intended
+            # re-confirmation press.
+            prev_mode = self._mode_index
             if ((value != 0) or (not sender.is_momentary())):
                 self.set_mode(index)
+            # Status-bar feedback (quick-260505-sb9). Fire on real
+            # transitions only -- only on press-down (value != 0) so we
+            # don't double-message on press + release.
+            if (value != 0
+                    and prev_mode != self._mode_index
+                    and self._messenger is not None):
+                try:
+                    if 0 <= self._mode_index < len(self._MODE_NAMES):
+                        self._messenger.show_event(
+                            'Encoder mode: ' + self._MODE_NAMES[self._mode_index])
+                except Exception:
+                    pass
             if index == 0 and sender.is_momentary() and (value != 0): #added check for Pan button
                 self._pan_to_vol_ticks_delay = PAN_TO_VOL_DELAY
             else:
@@ -102,6 +129,15 @@ class EncModeSelectorComponent(ModeSelectorComponent):
                         self.set_mode(0)
                         self.update()
                         self._send_momentary_active = False
+                        # Send-mode momentary auto-revert: the user just
+                        # experienced a mode change back to Pan, so emit
+                        # the corresponding status message (quick-260505-sb9).
+                        if self._messenger is not None:
+                            try:
+                                self._messenger.show_event(
+                                    'Encoder mode: ' + self._MODE_NAMES[0])
+                            except Exception:
+                                pass
                     self._send_ticks_delay = -1
 
     def update(self):

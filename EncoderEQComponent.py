@@ -580,7 +580,7 @@ class EncoderEQComponent(ControlSurfaceComponent):
     __module__ = __name__
     __doc__ = " Class representing encoder EQ component "
 
-    def __init__(self, mixer, parent):
+    def __init__(self, mixer, parent, messenger=None):
         ControlSurfaceComponent.__init__(self)
         assert isinstance(mixer, MixerComponent)
         self._param_controls = None
@@ -594,6 +594,13 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._track = None
         self._strip = None
         self._parent = parent
+        # Status-bar messenger + transition tracker (quick-260505-sb9).
+        # EQ Smart Control mode is "active" whenever the selected track
+        # has an EQ-recognized device (Eq8 / FilterEQ3 / ChannelEq /
+        # AudioEffectGroupDevice) AND we are enabled. Track the last
+        # active device so the messenger fires once per real transition.
+        self._messenger = messenger
+        self._last_active_eq_device = None
         self._track_eq = SpecialTrackEQComponent(parent)
         self._track_filter = SpecialTrackFilterComponent(parent)
         # Channel EQ (Live 11+) state — extras that don't fit the gain/cut shape.
@@ -629,6 +636,8 @@ class EncoderEQComponent(ControlSurfaceComponent):
         self._track_filter = None
         self._channel_eq_device = None
         self._eq8_device = None
+        self._messenger = None
+        self._last_active_eq_device = None
 
     def update(self):
         pass
@@ -669,6 +678,21 @@ class EncoderEQComponent(ControlSurfaceComponent):
         eq_device = getattr(self._track_eq, '_device', None)
         eq_class = getattr(eq_device, 'class_name', None) if eq_device is not None else None
         channel_eq = self._detect_channel_eq()
+
+        # Status-bar feedback (quick-260505-sb9). EQ Smart Control is
+        # "active" whenever the track has an EQ-recognized device. Fire
+        # show_mode once per real transition; identical-text dedup in
+        # the messenger covers any spurious double-fire.
+        active_device = channel_eq if channel_eq is not None else eq_device
+        if self._messenger is not None:
+            try:
+                if active_device is not None and self._last_active_eq_device is None:
+                    self._messenger.show_mode('EQ Smart Control', True)
+                elif active_device is None and self._last_active_eq_device is not None:
+                    self._messenger.show_mode('EQ Smart Control', False)
+            except Exception:
+                pass
+        self._last_active_eq_device = active_device
         if channel_eq is not None:
             self._track_filter.set_track(None)
             self._teardown_channel_eq_extras()
@@ -1039,7 +1063,17 @@ class EncoderEQComponent(ControlSurfaceComponent):
 
 
     def on_enabled_changed(self):
-        self.update()  
+        # When the EncoderUserModesComponent disables this sub-mode, treat it
+        # as a mode-exit if we were previously messaged-as-active. Mirrors
+        # the pattern used in EncoderAutoFilterComponent.
+        if not self.is_enabled():
+            if self._messenger is not None and self._last_active_eq_device is not None:
+                try:
+                    self._messenger.show_mode('EQ Smart Control', False)
+                except Exception:
+                    pass
+            self._last_active_eq_device = None
+        self.update()
 
     def set_lock_button(self, button):
         assert ((button == None) or isinstance(button, ButtonElement))

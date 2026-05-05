@@ -21,18 +21,34 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # emacs-mode: -*- python-*-
 # -*- coding: utf-8 -*-
 
-from _Framework.ModeSelectorComponent import ModeSelectorComponent 
-from _Framework.ButtonElement import ButtonElement 
-from _Framework.MixerComponent import MixerComponent 
+from _Framework.ModeSelectorComponent import ModeSelectorComponent
+from _Framework.ButtonElement import ButtonElement
+from _Framework.MixerComponent import MixerComponent
 from _Framework.ButtonMatrixElement import ButtonMatrixElement
 from _Framework.ControlSurface import ControlSurface
 from .Matrix_Maps import *
+
+
+# Matrix mode index -> human-readable label for status-bar feedback
+# (quick-260505-sb9). Order MUST match the matrix-mode buttons' wiring
+# order in ShiftableSelectorComponent (Track Select 1..8 with shift).
+MATRIX_MODE_NAMES = (
+    'Clip Launch',          # 0
+    'Session Overview',     # 1
+    'Note Mode 1',          # 2
+    'Note Mode 2',          # 3
+    'Note Mode 3',          # 4
+    'Note Mode 4',          # 5
+    'Global Variations',    # 6
+    'Variations',           # 7
+)
+
 
 class MatrixModesComponent(ModeSelectorComponent):
     ' SelectorComponent that assigns matrix to different functions '
     __module__ = __name__
 
-    def __init__(self, matrix, session, zooming, stop_buttons, parent):
+    def __init__(self, matrix, session, zooming, stop_buttons, parent, messenger=None):
         assert isinstance(matrix, ButtonMatrixElement)
         ModeSelectorComponent.__init__(self)
         self._controls = None
@@ -68,8 +84,12 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._global_var_listened_devices = []
         self._global_var_song_tracks_listener_attached = False
         self._global_var_song_visible_tracks_listener_attached = False
+        # Status-bar messenger (quick-260505-sb9). Used for matrix-mode
+        # swap announcements + snapshot-recall + randomize messages
+        # (Task 4 wiring continues this story).
+        self._messenger = messenger
 
-        
+
     def disconnect(self):
         self._teardown_global_variations_mode()
         self._teardown_variations_mode()
@@ -81,6 +101,7 @@ class MatrixModesComponent(ModeSelectorComponent):
         self._matrix = None
         self._track_stop_buttons = None
         self._stop_button_matrix = None
+        self._messenger = None
         ModeSelectorComponent.disconnect(self)
 
         
@@ -91,6 +112,16 @@ class MatrixModesComponent(ModeSelectorComponent):
             self._last_mode = 0 # self._mode_index # keep track of previous mode, to allow refresh after Note Mode only
             self._mode_index = mode
             self._set_modes()
+            # Status-bar feedback (quick-260505-sb9). Inside the
+            # `if mode_index != mode` guard so we only message on real
+            # transitions, not on no-op re-enters from teardown paths
+            # that also call _set_modes directly.
+            if self._messenger is not None and 0 <= mode < len(MATRIX_MODE_NAMES):
+                try:
+                    self._messenger.show_event(
+                        'Matrix: ' + MATRIX_MODE_NAMES[mode])
+                except Exception:
+                    pass
             
             
     def set_mode_buttons(self, buttons):

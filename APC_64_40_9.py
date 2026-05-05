@@ -52,6 +52,7 @@ from .EncoderAutoFilterComponent import EncoderAutoFilterComponent
 from .StepSequencerComponent import StepSequencerComponent
 from .ShiftableZoomingComponent import ShiftableZoomingComponent
 from .DrumRackModeComponent import DrumRackModeComponent
+from .StatusBarMessenger import StatusBarMessenger
 
 class APC_64_40_9(APC):
     """ Script for Akai's APC40 Controller """
@@ -64,6 +65,13 @@ class APC_64_40_9(APC):
         self._pan16_top = None
         self._pan16_enc = None
         self._drum_rack_mode = None
+        # Status-bar messenger (quick-260505-sb9). Constructed BEFORE
+        # APC.__init__ so the setup paths in _setup_session_control /
+        # _setup_mixer_control / _setup_custom_components can pass it
+        # to every mode-emitting and hardware-listening component.
+        # Cold-start silence (2s) suppresses the handshake-time setup
+        # paint; first user-visible message lands ~2s after script load.
+        self._status_messenger = StatusBarMessenger(self)
         APC.__init__(self, c_instance)
         self._device_selection_follows_track_selection = True
 
@@ -75,6 +83,7 @@ class APC_64_40_9(APC):
         self._pan16_top = None
         self._pan16_enc = None
         self._drum_rack_mode = None
+        self._status_messenger = None
         APC.disconnect(self)
 
     def _setup_session_control(self):
@@ -192,7 +201,7 @@ class APC_64_40_9(APC):
         self._mixer.master_strip().set_volume_control(master_volume_control)
         self._slider_modes = SliderModesComponent(self._mixer, tuple(sliders))
         self._slider_modes.name = 'Slider_Modes'
-        matrix_modes = MatrixModesComponent(self._matrix, self._session, self._session_zoom, tuple(self._track_stop_buttons), self)
+        matrix_modes = MatrixModesComponent(self._matrix, self._session, self._session_zoom, tuple(self._track_stop_buttons), self, messenger=self._status_messenger)
         matrix_modes.name = 'Matrix_Modes'
         self._sequencer = StepSequencerComponent(self, self._session, self._matrix, tuple(self._track_stop_buttons))
         self._sequencer.set_bank_buttons(tuple(select_buttons))
@@ -290,7 +299,7 @@ class APC_64_40_9(APC):
         for index in range(4):
             self._global_bank_buttons.append(ConfigurableButtonElement(is_momentary, MIDI_NOTE_TYPE, 0, 87 + index))
             self._global_bank_buttons[-1].name = global_bank_labels[index]
-        self._encoder_modes = EncModeSelectorComponent(self._mixer)
+        self._encoder_modes = EncModeSelectorComponent(self._mixer, messenger=self._status_messenger)
         self._encoder_modes.name = 'Track_Control_Modes'
         # Per D-01, D-10: instantiate Pan16DeviceComponent instances and inject BEFORE set_controls
         # so that update() (triggered by set_controls) sees them
@@ -318,9 +327,9 @@ class APC_64_40_9(APC):
         # now AutoFilter mode. The variable name `_encoder_device_modes` is
         # retained because EncoderUserModesComponent / ShiftableEncoderSelectorComponent
         # reference it; only the underlying class changes.
-        self._encoder_device_modes = EncoderAutoFilterComponent(self._mixer, self)
+        self._encoder_device_modes = EncoderAutoFilterComponent(self._mixer, self, messenger=self._status_messenger)
         self._encoder_device_modes.name = 'AutoFilter_Control_Modes'
-        self._encoder_eq_modes = EncoderEQComponent(self._mixer, self)
+        self._encoder_eq_modes = EncoderEQComponent(self._mixer, self, messenger=self._status_messenger)
         self._encoder_eq_modes.name = 'EQ_Control_Modes'
         global_translation_selector = ChannelTranslationSelector()
         global_translation_selector.name = 'Global_Translations'
@@ -358,6 +367,7 @@ class APC_64_40_9(APC):
             # View now exits the mode for the current track.
             detail_view_button=self._device_bank_buttons[4],
             shift_button=self._shift_button,
+            messenger=self._status_messenger,
         )
         self._drum_rack_mode.name = 'Drum_Rack_Mode'
         self._drum_rack_mode.trigger_initial_evaluation()
