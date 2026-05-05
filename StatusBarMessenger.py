@@ -85,14 +85,24 @@ class StatusBarMessenger(object):
         except Exception:
             return
 
-        # Each strategy returns (sent_bool, label_str_for_log).
+        # Round-3: previous strategies all failed.
+        #   - song.show_message  → AttributeError (no such method)
+        #   - app.show_message(text)  → C++ self-type mismatch (Application
+        #     vs ASongApp): the method is exposed via Application namespace
+        #     but the C++ receiver is ASongApp, so it's unreachable from
+        #     script regardless of arg form.
+        #   - app.show_message(text, 0, False, False)  → same mismatch
+        # Remaining viable paths target Application.View, get_document,
+        # and the c_instance fallback.
         strategies = (
-            ('song.show_message(text)',
-             lambda: self._try_song_show_message(text)),
-            ('app.show_message(text)',
-             lambda: self._try_app_show_message_simple(text)),
-            ('app.show_message(text, 0, False, False)',
-             lambda: self._try_app_show_message_full(text)),
+            ('app.view.show_message(text)',
+             lambda: self._try_view_show_message(text)),
+            ('app.view.set_status_text(text)',
+             lambda: self._try_view_set_status_text(text)),
+            ('app.get_document().show_message(text)',
+             lambda: self._try_document_show_message(text)),
+            ('parent._c_instance.show_message(text)',
+             lambda: self._try_c_instance_show_message(text)),
         )
 
         for label, fn in strategies:
@@ -126,35 +136,59 @@ class StatusBarMessenger(object):
                     setattr(self, '_logged_loser_' + label, True)
         # All strategies failed -- fail quiet.
 
-    def _try_song_show_message(self, text):
-        try:
-            song = self._parent.song()
-            if song is None:
-                return False, 'song() is None'
-            song.show_message(text)
-            return True, None
-        except Exception as exc:
-            return False, type(exc).__name__ + ': ' + str(exc)
-
-    def _try_app_show_message_simple(self, text):
+    def _try_view_show_message(self, text):
         try:
             app = self._parent.application()
             if app is None:
                 return False, 'application() is None'
-            app.show_message(text)
+            view = getattr(app, 'view', None)
+            if view is None:
+                return False, 'application().view is None'
+            view.show_message(text)
             return True, None
         except Exception as exc:
             return False, type(exc).__name__ + ': ' + str(exc)
 
-    def _try_app_show_message_full(self, text):
+    def _try_view_set_status_text(self, text):
         try:
             app = self._parent.application()
             if app is None:
                 return False, 'application() is None'
-            # Match the C++ signature exactly: text, buttons, enable_markup,
-            # show_success_icon. The first error message hinted that
-            # Boost.Python isn't auto-filling defaults on this build.
-            app.show_message(text, 0, False, False)
+            view = getattr(app, 'view', None)
+            if view is None:
+                return False, 'application().view is None'
+            # Persistent text — replaces any existing status. UX-wise the
+            # user expects transient (auto-fade) but if this is the only
+            # API that works, fake transience by clearing on the next emit
+            # (handled implicitly: next show_* call replaces the text).
+            view.set_status_text(text)
+            return True, None
+        except Exception as exc:
+            return False, type(exc).__name__ + ': ' + str(exc)
+
+    def _try_document_show_message(self, text):
+        try:
+            app = self._parent.application()
+            if app is None:
+                return False, 'application() is None'
+            doc = None
+            if hasattr(app, 'get_document'):
+                doc = app.get_document()
+            if doc is None:
+                return False, 'get_document() is None'
+            doc.show_message(text)
+            return True, None
+        except Exception as exc:
+            return False, type(exc).__name__ + ': ' + str(exc)
+
+    def _try_c_instance_show_message(self, text):
+        try:
+            ci = getattr(self._parent, '_c_instance', None)
+            if ci is None:
+                return False, 'parent._c_instance is None'
+            if not hasattr(ci, 'show_message'):
+                return False, '_c_instance has no show_message attr'
+            ci.show_message(text)
             return True, None
         except Exception as exc:
             return False, type(exc).__name__ + ': ' + str(exc)
