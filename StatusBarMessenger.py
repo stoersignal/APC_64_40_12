@@ -58,6 +58,16 @@ class StatusBarMessenger(object):
         # of inactivity so a deliberate re-display works after a pause.
         self._last_text = None
         self._last_text_ms = 0.0
+        # UAT round 1 reported "no messages at all" -- every silent except in
+        # _emit was swallowing the actual cause. Set _diag=True to surface
+        # every show_* attempt + the result via parent.log_message().
+        # Disable after the failure mode is identified.
+        self._diag = True
+        self._diag_emit_count = 0
+        try:
+            self._parent.log_message('[StatusBar] messenger constructed @ ms=' + repr(int(self._construct_ms)))
+        except Exception:
+            pass
 
     # -- timing utilities ----------------------------------------------------
 
@@ -75,16 +85,54 @@ class StatusBarMessenger(object):
         emission for identical-text dedup. Wrapped in try/except because
         application() can raise mid-teardown (parent already None'd) or
         on cold boot before handshake completes."""
+        if self._diag:
+            self._diag_emit_count += 1
+            try:
+                self._parent.log_message(
+                    '[StatusBar] _emit #' + repr(self._diag_emit_count) +
+                    ' text=' + repr(text))
+            except Exception:
+                pass
         try:
+            if self._parent is None:
+                if self._diag:
+                    try:
+                        self._parent.log_message('[StatusBar] _emit ABORT: parent is None')
+                    except Exception:
+                        pass
+                return
             app = self._parent.application()
             if app is None:
+                if self._diag:
+                    try:
+                        self._parent.log_message('[StatusBar] _emit ABORT: application() returned None')
+                    except Exception:
+                        pass
                 return
+            if self._diag:
+                try:
+                    self._parent.log_message(
+                        '[StatusBar] application=' + repr(app) +
+                        ' has_show_message=' + repr(hasattr(app, 'show_message')))
+                except Exception:
+                    pass
             app.show_message(text)
             self._last_text = text
             self._last_text_ms = self._now_ms()
-        except Exception:
+            if self._diag:
+                try:
+                    self._parent.log_message('[StatusBar] _emit OK: show_message returned')
+                except Exception:
+                    pass
+        except Exception as exc:
             # Project idiom: fail quiet rather than crash mid-set.
-            pass
+            if self._diag:
+                try:
+                    self._parent.log_message(
+                        '[StatusBar] _emit RAISED: ' + type(exc).__name__ +
+                        ': ' + str(exc))
+                except Exception:
+                    pass
 
     def _check_dedup(self, text):
         """Return True if `text` should be dropped due to identical-text
@@ -108,9 +156,22 @@ class StatusBarMessenger(object):
         text dedup."""
         try:
             if self._is_cold_start():
+                if self._diag:
+                    try:
+                        self._parent.log_message(
+                            '[StatusBar] show_mode SUPPRESSED (cold-start) mode=' + repr(mode_name) +
+                            ' entered=' + repr(entered) +
+                            ' elapsed_ms=' + repr(int(self._now_ms() - self._construct_ms)))
+                    except Exception:
+                        pass
                 return
             text = mode_name if entered else (str(mode_name) + ' exited')
             if self._check_dedup(text):
+                if self._diag:
+                    try:
+                        self._parent.log_message('[StatusBar] show_mode DEDUPED text=' + repr(text))
+                    except Exception:
+                        pass
                 return
             self._emit(text)
         except Exception:
@@ -121,6 +182,13 @@ class StatusBarMessenger(object):
         throttle; honors cold-start silence + identical-text dedup."""
         try:
             if self._is_cold_start():
+                if self._diag:
+                    try:
+                        self._parent.log_message(
+                            '[StatusBar] show_event SUPPRESSED (cold-start) text=' + repr(text) +
+                            ' elapsed_ms=' + repr(int(self._now_ms() - self._construct_ms)))
+                    except Exception:
+                        pass
                 return
             if self._check_dedup(text):
                 return
