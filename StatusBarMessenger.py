@@ -71,127 +71,24 @@ class StatusBarMessenger(object):
     # -- single emit chokepoint ---------------------------------------------
 
     def _emit(self, text):
-        """Try multiple show_message dispatch strategies until one
-        succeeds. Live 11/12 binding has been seen to reject single-arg
-        Application.show_message(str) with a TText/buttons/enable_markup/
-        show_success_icon C++ signature mismatch; Song.show_message also
-        not always available; explicit-defaults form sometimes satisfies
-        Boost.Python binding. We try in order and log which one wins.
-        Round-2 fix removed once we confirm which path works on this
-        Live build."""
+        """Send `text` via the ControlSurface's own show_message — the
+        same _Framework callback that ShiftableTransportComponent uses
+        for the Variations Ramp Time display ("Ramp: 250ms" /
+        "Ramp: 1/4" / "Ramping 500ms"). Each ControlSurfaceComponent
+        gets _show_msg_callback as a bound reference to surface.show_message;
+        we hold the surface itself as self._parent, so the direct call is
+        self._parent.show_message(text).
+        Wrapped in try/except because show_message can raise mid-teardown
+        (parent already None'd) or on cold boot before handshake completes."""
         try:
             if self._parent is None:
                 return
+            self._parent.show_message(text)
+            self._last_text = text
+            self._last_text_ms = self._now_ms()
         except Exception:
-            return
-
-        # Round-3: previous strategies all failed.
-        #   - song.show_message  → AttributeError (no such method)
-        #   - app.show_message(text)  → C++ self-type mismatch (Application
-        #     vs ASongApp): the method is exposed via Application namespace
-        #     but the C++ receiver is ASongApp, so it's unreachable from
-        #     script regardless of arg form.
-        #   - app.show_message(text, 0, False, False)  → same mismatch
-        # Remaining viable paths target Application.View, get_document,
-        # and the c_instance fallback.
-        strategies = (
-            ('app.view.show_message(text)',
-             lambda: self._try_view_show_message(text)),
-            ('app.view.set_status_text(text)',
-             lambda: self._try_view_set_status_text(text)),
-            ('app.get_document().show_message(text)',
-             lambda: self._try_document_show_message(text)),
-            ('parent._c_instance.show_message(text)',
-             lambda: self._try_c_instance_show_message(text)),
-        )
-
-        for label, fn in strategies:
-            try:
-                ok, exc_text = fn()
-            except Exception as exc:
-                ok, exc_text = False, type(exc).__name__ + ': ' + str(exc)
-            if ok:
-                self._last_text = text
-                self._last_text_ms = self._now_ms()
-                # One-shot log per success-strategy so the next UAT round
-                # tells us which form Live 11/12 accepts. Logged ONCE per
-                # text via _last_text comparison so we don't spam.
-                if not getattr(self, '_logged_winner_' + label, False):
-                    try:
-                        self._parent.log_message(
-                            '[StatusBar] WINNER strategy=' + repr(label) +
-                            ' text=' + repr(text))
-                    except Exception:
-                        pass
-                    setattr(self, '_logged_winner_' + label, True)
-                return
-            else:
-                if not getattr(self, '_logged_loser_' + label, False):
-                    try:
-                        self._parent.log_message(
-                            '[StatusBar] FAIL strategy=' + repr(label) +
-                            ' err=' + repr(exc_text))
-                    except Exception:
-                        pass
-                    setattr(self, '_logged_loser_' + label, True)
-        # All strategies failed -- fail quiet.
-
-    def _try_view_show_message(self, text):
-        try:
-            app = self._parent.application()
-            if app is None:
-                return False, 'application() is None'
-            view = getattr(app, 'view', None)
-            if view is None:
-                return False, 'application().view is None'
-            view.show_message(text)
-            return True, None
-        except Exception as exc:
-            return False, type(exc).__name__ + ': ' + str(exc)
-
-    def _try_view_set_status_text(self, text):
-        try:
-            app = self._parent.application()
-            if app is None:
-                return False, 'application() is None'
-            view = getattr(app, 'view', None)
-            if view is None:
-                return False, 'application().view is None'
-            # Persistent text — replaces any existing status. UX-wise the
-            # user expects transient (auto-fade) but if this is the only
-            # API that works, fake transience by clearing on the next emit
-            # (handled implicitly: next show_* call replaces the text).
-            view.set_status_text(text)
-            return True, None
-        except Exception as exc:
-            return False, type(exc).__name__ + ': ' + str(exc)
-
-    def _try_document_show_message(self, text):
-        try:
-            app = self._parent.application()
-            if app is None:
-                return False, 'application() is None'
-            doc = None
-            if hasattr(app, 'get_document'):
-                doc = app.get_document()
-            if doc is None:
-                return False, 'get_document() is None'
-            doc.show_message(text)
-            return True, None
-        except Exception as exc:
-            return False, type(exc).__name__ + ': ' + str(exc)
-
-    def _try_c_instance_show_message(self, text):
-        try:
-            ci = getattr(self._parent, '_c_instance', None)
-            if ci is None:
-                return False, 'parent._c_instance is None'
-            if not hasattr(ci, 'show_message'):
-                return False, '_c_instance has no show_message attr'
-            ci.show_message(text)
-            return True, None
-        except Exception as exc:
-            return False, type(exc).__name__ + ': ' + str(exc)
+            # Project idiom: fail quiet rather than crash mid-set.
+            pass
 
     def _check_dedup(self, text):
         """Return True if `text` should be dropped due to identical-text
