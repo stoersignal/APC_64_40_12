@@ -432,6 +432,18 @@ class MatrixModesComponent(ModeSelectorComponent):
                     device.selected_variation_index = new_count - 1
                 except Exception:
                     pass
+                # Status-bar feedback (quick-260505-sb9). Fires when the
+                # Live UI stored a variation while we're in Variations
+                # Mode. The same event from the APC40 path
+                # (ShiftableTransportComponent.Shift+Tap-Tempo release)
+                # also emits "Snapshot N stored"; the messenger's
+                # identical-text dedup window suppresses the duplicate.
+                if self._messenger is not None:
+                    try:
+                        self._messenger.show_event(
+                            'Snapshot ' + str(new_count) + ' stored')
+                    except Exception:
+                        pass
             self._variations_prev_count = new_count
         self._refresh_variations_leds()
 
@@ -496,6 +508,14 @@ class MatrixModesComponent(ModeSelectorComponent):
                 device.recall_selected_variation()
         except Exception:
             return
+        # Status-bar feedback (quick-260505-sb9). 1-indexed for human
+        # readability (pad 0 = "Snapshot 1 recalled").
+        if self._messenger is not None:
+            try:
+                self._messenger.show_event(
+                    'Snapshot ' + str(int(pad_index) + 1) + ' recalled')
+            except Exception:
+                pass
         # Explicit repaint — the selected_variation_index listener also fires,
         # but Live does not guarantee it has propagated by the time we return,
         # and a stuck-green pad (UAT 2026-05-04) showed the listener alone is
@@ -514,6 +534,12 @@ class MatrixModesComponent(ModeSelectorComponent):
             device.randomize_macros()
         except Exception:
             return
+        # Status-bar feedback (quick-260505-sb9).
+        if self._messenger is not None:
+            try:
+                self._messenger.show_event('Macros randomized')
+            except Exception:
+                pass
 
 
     # --- Global Variations Mode (matrix slot 6) ------------------------------
@@ -904,6 +930,14 @@ class MatrixModesComponent(ModeSelectorComponent):
                 rack.recall_selected_variation()
         except Exception:
             return
+        # Status-bar feedback (quick-260505-sb9). 1-indexed for human
+        # readability (variation_index 0 = "Snapshot 1 recalled").
+        if self._messenger is not None:
+            try:
+                self._messenger.show_event(
+                    'Snapshot ' + str(int(variation_index) + 1) + ' recalled')
+            except Exception:
+                pass
         # Synchronous repaint — same belt+listener strategy as 260504-5j0.
         self._global_var_refresh_leds()
 
@@ -953,13 +987,22 @@ class MatrixModesComponent(ModeSelectorComponent):
     def _global_var_stop_all_value(self, value):
         if not self.is_enabled() or value == 0:
             return
+        any_done = False
         for (_track, rack) in self._global_var_track_racks:
             if rack is None or not hasattr(rack, 'randomize_macros'):
                 continue
             try:
                 rack.randomize_macros()
+                any_done = True
             except Exception:
                 continue
+        # Status-bar feedback (quick-260505-sb9). Only message if at
+        # least one rack actually got randomized.
+        if any_done and self._messenger is not None:
+            try:
+                self._messenger.show_event('Macros randomized (all columns)')
+            except Exception:
+                pass
 
 
 # local variables:

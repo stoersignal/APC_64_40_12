@@ -13,7 +13,7 @@ RAMP_TIMER_INTERVAL = 0.1  # 100ms per tick, same as framework timer
 
 class ShiftableTransportComponent(CustomTransportComponent):
     __doc__ = ' CustomTransportComponent that only uses certain buttons if a shift button is pressed '
-    def __init__(self):
+    def __init__(self, messenger=None):
         CustomTransportComponent.__init__(self)
         self._shift_button = None
         self._quant_toggle_button = None
@@ -21,6 +21,10 @@ class ShiftableTransportComponent(CustomTransportComponent):
         self._last_quant_value = Live.Song.RecordingQuantization.rec_q_eight
         self.song().add_midi_recording_quantization_listener(self._on_quantisation_changed)
         self._on_quantisation_changed()
+        # Status-bar messenger (quick-260505-sb9). Used for snapshot
+        # save / recall + lock-to-device messages on Shift+Tap-Tempo,
+        # Tap-Tempo, and Shift+Nudge-Back.
+        self._messenger = messenger
         self._undo_button = None
         self._redo_button = None
         self._bts_button = None
@@ -50,6 +54,7 @@ class ShiftableTransportComponent(CustomTransportComponent):
         self._ramp_active = False
         self._unregister_timer_callback(self._on_ramp_timer)
         self._ramp_encoders = None
+        self._messenger = None
         CustomTransportComponent.disconnect(self)
         if self._shift_button != None:
             self._shift_button.remove_value_listener(self._shift_value)
@@ -149,6 +154,16 @@ class ShiftableTransportComponent(CustomTransportComponent):
             device = self.song().appointed_device
             if device is not None:
                 self._device_component.set_lock_to_device(not self._device_component._locked_to_device, device)
+                # Status-bar feedback (quick-260505-sb9). Read the
+                # POST-toggle state from the device component so the
+                # message reflects the new state.
+                if self._messenger is not None:
+                    try:
+                        new_state = self._device_component._locked_to_device
+                        self._messenger.show_event(
+                            'Lock to device: ' + ('ON' if new_state else 'OFF'))
+                    except Exception:
+                        pass
         else:
             device = self.song().appointed_device
             if device is not None and hasattr(device, 'variation_count') and device.variation_count > 0:
@@ -169,11 +184,36 @@ class ShiftableTransportComponent(CustomTransportComponent):
                     device = self.song().appointed_device
                     if device is not None and hasattr(device, 'store_variation'):
                         device.store_variation()
+                        # Status-bar feedback (quick-260505-sb9). variation_count
+                        # is the count AFTER store -- using `n` directly reads
+                        # naturally as 'Snapshot 5 stored' when the count goes
+                        # from 4 to 5. The MatrixModesComponent count-change
+                        # listener also fires when in Variations Mode -- the
+                        # messenger's identical-text dedup covers the duplicate.
+                        if self._messenger is not None:
+                            try:
+                                n = int(getattr(device, 'variation_count', 0))
+                                self._messenger.show_event(
+                                    'Snapshot ' + str(n) + ' stored')
+                            except Exception:
+                                pass
                 self._exit_ramp_edit()
         else:
             if value != 0:
                 # Tap Tempo press: recall with ramp
                 self._recall_with_ramp()
+                # Status-bar feedback (quick-260505-sb9). selected_variation_index
+                # has been updated by recall_selected_variation; use 1-indexed
+                # for human readability (UAT confirmed pad 0 = Snapshot 1).
+                if self._messenger is not None:
+                    try:
+                        device = self.song().appointed_device
+                        if device is not None and hasattr(device, 'selected_variation_index'):
+                            idx = int(device.selected_variation_index) + 1
+                            self._messenger.show_event(
+                                'Snapshot ' + str(idx) + ' recalled')
+                    except Exception:
+                        pass
 
 
     def _quant_toggle_value(self, value):

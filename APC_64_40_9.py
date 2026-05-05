@@ -259,7 +259,7 @@ class APC_64_40_9(APC):
         detail_view_toggler.set_device_clip_toggle_button(self._device_bank_buttons[0])
         detail_view_toggler.set_detail_toggle_button(self._device_bank_buttons[4])
         detail_view_toggler.set_device_nav_buttons(self._device_bank_buttons[2], self._device_bank_buttons[3])
-        self._transport = ShiftableTransportComponent()
+        self._transport = ShiftableTransportComponent(messenger=self._status_messenger)
         self._transport.name = 'Transport'
         transport = self._transport
         play_button = ButtonElement(is_momentary, MIDI_NOTE_TYPE, 0, 91)
