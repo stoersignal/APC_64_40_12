@@ -45,10 +45,10 @@ class StatusBarMessenger(object):
 
     def __init__(self, parent):
         # parent = the ControlSurface (APC_64_40_9 instance). Stored so we
-        # can call parent.application().show_message(...) at emit-time.
-        # Application() is queried lazily because on cold boot it can
-        # raise (handshake not complete yet) -- the cold-start gate
-        # below covers that window, but we also catch in _emit.
+        # can call parent.song().show_message(...) at emit-time. song() is
+        # queried lazily because on cold boot it can raise (handshake not
+        # complete yet) -- the cold-start gate below covers that window,
+        # but we also catch in _emit.
         self._parent = parent
         self._construct_ms = self._now_ms()
         # show_param throttle keyed on id(param). None means "no last param".
@@ -58,16 +58,6 @@ class StatusBarMessenger(object):
         # of inactivity so a deliberate re-display works after a pause.
         self._last_text = None
         self._last_text_ms = 0.0
-        # UAT round 1 reported "no messages at all" -- every silent except in
-        # _emit was swallowing the actual cause. Set _diag=True to surface
-        # every show_* attempt + the result via parent.log_message().
-        # Disable after the failure mode is identified.
-        self._diag = True
-        self._diag_emit_count = 0
-        try:
-            self._parent.log_message('[StatusBar] messenger constructed @ ms=' + repr(int(self._construct_ms)))
-        except Exception:
-            pass
 
     # -- timing utilities ----------------------------------------------------
 
@@ -81,58 +71,44 @@ class StatusBarMessenger(object):
     # -- single emit chokepoint ---------------------------------------------
 
     def _emit(self, text):
-        """Send `text` via parent.application().show_message. Records the
-        emission for identical-text dedup. Wrapped in try/except because
-        application() can raise mid-teardown (parent already None'd) or
-        on cold boot before handshake completes."""
-        if self._diag:
-            self._diag_emit_count += 1
-            try:
-                self._parent.log_message(
-                    '[StatusBar] _emit #' + repr(self._diag_emit_count) +
-                    ' text=' + repr(text))
-            except Exception:
-                pass
+        """Send `text` via parent.song().show_message. Records the emission
+        for identical-text dedup. Wrapped in try/except because song() can
+        raise mid-teardown (parent already None'd) or on cold boot before
+        handshake completes."""
         try:
             if self._parent is None:
-                if self._diag:
-                    try:
-                        self._parent.log_message('[StatusBar] _emit ABORT: parent is None')
-                    except Exception:
-                        pass
                 return
-            app = self._parent.application()
-            if app is None:
-                if self._diag:
-                    try:
-                        self._parent.log_message('[StatusBar] _emit ABORT: application() returned None')
-                    except Exception:
-                        pass
-                return
-            if self._diag:
+            # Live 11+ rebound the dispatch: `Application.show_message` is a
+            # MODAL DIALOG ('buttons=OK_BUTTON', 'show_success_icon') — its
+            # C++ signature rejects a plain str (we hit "did not match C++
+            # signature: ... TText text, int buttons, bool enable_markup,
+            # bool show_success_icon" on every call). The TRANSIENT STATUS
+            # BAR API is `Song.show_message(text)` — exactly what we want.
+            # Use song() (inherited from ControlSurface), with a fallback to
+            # application() in case some future Live build flips the API
+            # back.
+            sent = False
+            try:
+                song = self._parent.song()
+                if song is not None:
+                    song.show_message(text)
+                    sent = True
+            except Exception:
+                pass
+            if not sent:
                 try:
-                    self._parent.log_message(
-                        '[StatusBar] application=' + repr(app) +
-                        ' has_show_message=' + repr(hasattr(app, 'show_message')))
+                    app = self._parent.application()
+                    if app is not None:
+                        app.show_message(text)
+                        sent = True
                 except Exception:
                     pass
-            app.show_message(text)
-            self._last_text = text
-            self._last_text_ms = self._now_ms()
-            if self._diag:
-                try:
-                    self._parent.log_message('[StatusBar] _emit OK: show_message returned')
-                except Exception:
-                    pass
-        except Exception as exc:
+            if sent:
+                self._last_text = text
+                self._last_text_ms = self._now_ms()
+        except Exception:
             # Project idiom: fail quiet rather than crash mid-set.
-            if self._diag:
-                try:
-                    self._parent.log_message(
-                        '[StatusBar] _emit RAISED: ' + type(exc).__name__ +
-                        ': ' + str(exc))
-                except Exception:
-                    pass
+            pass
 
     def _check_dedup(self, text):
         """Return True if `text` should be dropped due to identical-text
@@ -156,22 +132,9 @@ class StatusBarMessenger(object):
         text dedup."""
         try:
             if self._is_cold_start():
-                if self._diag:
-                    try:
-                        self._parent.log_message(
-                            '[StatusBar] show_mode SUPPRESSED (cold-start) mode=' + repr(mode_name) +
-                            ' entered=' + repr(entered) +
-                            ' elapsed_ms=' + repr(int(self._now_ms() - self._construct_ms)))
-                    except Exception:
-                        pass
                 return
             text = mode_name if entered else (str(mode_name) + ' exited')
             if self._check_dedup(text):
-                if self._diag:
-                    try:
-                        self._parent.log_message('[StatusBar] show_mode DEDUPED text=' + repr(text))
-                    except Exception:
-                        pass
                 return
             self._emit(text)
         except Exception:
@@ -182,13 +145,6 @@ class StatusBarMessenger(object):
         throttle; honors cold-start silence + identical-text dedup."""
         try:
             if self._is_cold_start():
-                if self._diag:
-                    try:
-                        self._parent.log_message(
-                            '[StatusBar] show_event SUPPRESSED (cold-start) text=' + repr(text) +
-                            ' elapsed_ms=' + repr(int(self._now_ms() - self._construct_ms)))
-                    except Exception:
-                        pass
                 return
             if self._check_dedup(text):
                 return
