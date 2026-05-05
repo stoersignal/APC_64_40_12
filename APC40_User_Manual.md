@@ -127,8 +127,12 @@ The Solo and Activator (Mute) buttons feature a smart state-machine:
 ## TODO — Phase 6 integration
 
 * [Phase 6 / quick-260504-m2x] Drum Rack Mode: auto-engages on tracks with top-level drum rack;
-  retargets faders to chain volume, Mute/Solo to chain mute/solo (v1.0 toggle/momentary timing),
-  Track Control encoders to chain pan/send-A/B/C (per existing mode buttons), Bank Select up/down
-  to chain scrolling (when chains > 8). Exit: Shift + Stop All Clips (per-track scope). LED on
-  Stop All Clips indicates mode active. Detection class: 'DrumGroupDevice', top-level only.
+  retargets faders to chain volume, Mute/Solo to chain mute/solo (v1.0 toggle/momentary timing
+  with v1.0 inverted feedback for mute), Track Control encoders to chain pan/send-A/B/C (per
+  existing mode buttons), Bank Select up/down to chain scrolling (only when chains > 8 — scene
+  nav still passes through on smaller racks). Exit: **Shift + Detail View** (per-track scope —
+  switching tracks re-evaluates from scratch). **Detail View button LED** indicates mode active
+  (was Stop All Clips originally; that LED is hardware-only on APC40 mk1 — see
+  .planning/quick/260504-m2x-add-drum-rack-mode/260504-m2x-SUMMARY.md "Post-UAT iterations" for
+  the four LED/scroll iterations). Detection class: 'DrumGroupDevice', top-level only.
   See .planning/quick/260504-m2x-add-drum-rack-mode/ for full spec.
