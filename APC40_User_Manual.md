@@ -2,6 +2,46 @@
 
 Welcome to the comprehensive guide for the custom APC_64_40 script. This remote script significantly upgrades the default APC40 functionality to include features like an advanced Step Sequencer, Macro Variations, Toggle/Momentary Mute and Solo states, and a 16-Macro mode.
 
+## Status Bar Feedback (v1.2)
+
+Whenever you press a button or turn a control on the APC40, Live's bottom-left **status bar** shows a brief description of what just happened — mode name, parameter value, snapshot operation, etc. Messages auto-fade after a few seconds, so the feedback never gets in your way.
+
+This feedback is **APC40-only**: turning a knob in Live's UI or playing back automation does **not** trigger a status message. The status bar reflects what the APC40 just did, not Live's full state.
+
+### What triggers a message
+
+| Action | Status bar shows |
+|---|---|
+| Selecting a track with a Drum Rack (auto-engage) | `Drum Rack Mode` |
+| Exiting Drum Rack Mode (Shift + Detail View) | `Drum Rack Mode exited` |
+| Selecting a track with an Auto Filter (Shift + Send A active) | `AutoFilter Mode` |
+| Auto Filter device removed / track switched away | `AutoFilter Mode exited` |
+| Selecting a track with an EQ (Shift + Send B active) | `EQ Smart Control` |
+| EQ device removed / track switched away | `EQ Smart Control exited` |
+| Pressing a matrix-mode button (Shift + Track Select 1..8) | `Matrix: Clip Launch`, `Matrix: Variations`, etc. |
+| Pressing Pan / Send A / Send B / Send C (Track Control) | `Encoder mode: Pan`, `Encoder mode: Send A`, etc. |
+| Storing a snapshot (Shift + Tap Tempo release) | `Snapshot 5 stored` |
+| Recalling a snapshot (Tap Tempo, or pad press in Variations Mode) | `Snapshot 5 recalled` |
+| Toggling Lock to Device (Shift + Nudge Back) | `Lock to device: ON` / `Lock to device: OFF` |
+| Randomizing macros (Stop All Clips in Variations Modes) | `Macros randomized` |
+| Moving any APC40-bound fader / encoder | `Volume: -6.3 dB`, `Cutoff: 1.20 kHz`, `Pan: 12L`, etc. |
+| Pressing an EQ / AutoFilter toggle button (Slope, Highpass, Sidechain, etc.) | `Slope: 48 dB/oct`, `Highpass: on`, `S/C On: on`, `Filter Type: Lowpass`, etc. |
+| Toggling chain mute / solo in Drum Rack Mode | `Kick mute: on`, `Snare solo: off`, etc. |
+
+### Throttling and quiet windows
+
+* **Per-parameter throttle**: when you turn an encoder rapidly back and forth, the status bar updates smoothly but not on every MIDI tick — there's a 50 ms debounce per parameter, capping updates at about 20 per second so the text stays readable.
+* **Different parameter = immediate**: switching to a different fader / encoder always emits the new message immediately; the throttle is per-parameter, not global.
+* **Identical-text dedup**: pressing the same mode button twice (e.g. Pan twice) emits the message once — repeats inside a 200 ms window are dropped.
+* **Cold-start silence**: the first ~2 seconds after Live opens (or the script reloads) are silent so the script-load setup paint does not spam the user.
+
+### What does NOT show
+
+* Mouse moves in Live's UI / parameter changes from automation playback do **not** emit status messages — only APC40 hardware actions do. This is intentional.
+* `TODO (260505-sb9)`: Pan16DeviceComponent's 16-macro encoders in Pan mode do not yet emit parameter-value status messages. Coverage parity is a future quick task.
+
+---
+
 ## 1. Global Navigation & Mode Selection
 
 Almost every button on the APC40 has a secondary function accessible by holding the **SHIFT** button (located on the bottom right of the controller). 
