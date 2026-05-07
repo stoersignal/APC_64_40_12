@@ -653,6 +653,29 @@ class EncoderEQComponent(ControlSurfaceComponent):
         pass
 
 
+    def refresh_button_leds(self):
+        # Quick-260505-lqz iteration: repaint kill-state + Pan-button LEDs
+        # without re-running the full _update_controls_and_buttons setup.
+        # Used by EncoderUserModesComponent on Shift-release to restore
+        # kill-state LEDs after the single-active-LED indicator overrode
+        # them during Shift hold. Pan-button mapping (highpass / slope /
+        # lock) varies by EQ device class — each restorer is a no-op when
+        # its respective binding isn't active.
+        if not self.is_enabled():
+            return
+        if self._track_eq is not None:
+            self._track_eq.update()
+        # Pan-button LED restore — only one of these is "active" at a time
+        # per the device-class branching in _update_controls_and_buttons.
+        self._update_highpass_led()
+        self._update_slope_led()
+        if self._lock_button is not None:
+            if self._is_locked:
+                self._lock_button.turn_on()
+            else:
+                self._lock_button.turn_off()
+
+
     def set_controls_and_buttons(self, controls, buttons):
         assert ((controls == None) or (isinstance(controls, tuple) and (len(controls) == 8)))
         self._param_controls = controls

@@ -73,7 +73,7 @@ class EncoderUserModesComponent(ModeSelectorComponent):
         assert isinstance(buttons, (tuple,
                                     type(None)))
         for button in self._modes_buttons:
-            button.remove_value_listener(self._mode_value)  
+            button.remove_value_listener(self._mode_value)
 
         self._modes_buttons = []
         if (buttons != None):
@@ -90,6 +90,16 @@ class EncoderUserModesComponent(ModeSelectorComponent):
             # _set_modes would re-bind the sub-component which then reclaims
             # the LEDs and overwrites the single-active-LED scheme.
             self._refresh_mode_leds()
+        else:
+            # Quick-260505-lqz: Shift-release. Ask the active sub-component
+            # to repaint button LEDs so the single-active-LED state we set
+            # during Shift hold is replaced by the sub-component's own
+            # scheme. Currently only mode 2 (EQ Smart Control) has button-
+            # LED ownership that needs immediate restoration. Without this,
+            # kill-state LEDs would stay overridden until the next kill
+            # toggle / parameter listener fire.
+            if self._mode_index == 2 and self._encoder_eq_modes is not None:
+                self._encoder_eq_modes.refresh_button_leds()
 
 
     def number_of_modes(self):
