@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Documentation
 status: phase_complete
-stopped_at: Phase 6 (create-user-manual) complete — 8/8 plans + layout-overhaul + spells polish + DOC-09 citation precision fix; user UAT passed 2026-05-05; v1.2 milestone ready to ship
-last_updated: "2026-05-05T13:30:43.654Z"
-last_activity: 2026-05-05 — Phase 6 UAT passed; ready to close v1.2 milestone
+stopped_at: Quick task 260505-lqz UAT-passed (final commit 01eedb9). v1.2 milestone still phase_complete_ready_to_ship — milestone-close decision pending.
+last_updated: "2026-05-07T00:00:00.000Z"
+last_activity: 2026-05-07 — quick-260505-lqz UAT-passed across all 3 rounds (single-active-LED + EQ-mode override + Shift-release kill-LED restore)
 progress:
   total_phases: 1
   completed_phases: 1
@@ -116,13 +116,14 @@ None yet.
 | 260504-m2x | add Drum Rack Mode (auto-engages on drum-rack tracks; faders/mute/solo/encoders + Bank scroll + Shift+Detail-View exit) | 2026-05-05 | fad89f9 | [260504-m2x-add-drum-rack-mode](./quick/260504-m2x-add-drum-rack-mode/) |
 | 260505-sb9 | Status Bar Messages — transient Live status-bar feedback for mode changes, encoder sub-mode flips, snapshot save/recall, lock-to-device, AND every APC40-bound parameter-value change | 2026-05-05 | cb161ec | [260505-sb9-status-bar-messages](./quick/260505-sb9-status-bar-messages/) |
 | 260505-tg2 | Shift+X mode toggle exit — re-pressing Shift+Send-A/B/C while in AutoFilter / EQ / User Mode now exits to Pan (was a no-op, stranding user in custom modes) | 2026-05-05 | e67b0a0 | [260505-tg2-shift-mode-toggle](./quick/260505-tg2-shift-mode-toggle/) |
+| 260505-lqz | Shift-mode LED indicator — while Shift is held, the 4 mode-selector buttons (Pan/Send A/B/C) display single-active-LED reflecting the current shift-mode (overrides sub-component LEDs in EQ Smart Control mode); kill-state LEDs repaint immediately on Shift-release | 2026-05-07 | 01eedb9 | [260505-lqz-shift-mode-led-indicator](./quick/260505-lqz-shift-mode-led-indicator/) |
 
 ## Session Continuity
 
-Last session: 2026-05-04T16:30:00Z
-Stopped at: Quick task 260504-k6p UAT-passed (final commit ee7c5ae) — AutoFilter Mode (Shift + Send A) verified across all 6 LFO T Mode settings via 4-round debug session (resolved at .planning/debug/resolved/lfo-rate-encoder-dead.md).
+Last session: 2026-05-07T00:00:00Z
+Stopped at: Quick task 260505-lqz UAT-passed (final commit 01eedb9). Three rounds: feat 5bf10f4 (single-active-LED) → fix 982c4dd (override sub-component LEDs) → fix 01eedb9 (Shift-release kill-LED repaint). v1.2 milestone still phase_complete_ready_to_ship.
 Resume file: None
-Next action: `/clear` then `/gsd-execute-phase 6` (resume v1.2 Documentation milestone — Phase 6 create-user-manual)
+Next action: Decide v1.2 milestone close (gsd-tools milestone <subcommand>) vs plan v1.3 (`/gsd-new-milestone`).
 
 ### Scaffold caveats
 
