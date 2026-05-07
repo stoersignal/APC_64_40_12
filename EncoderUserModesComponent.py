@@ -84,10 +84,12 @@ class EncoderUserModesComponent(ModeSelectorComponent):
                 self._modes_buttons.append(button)
             assert (self._mode_index in range(self.number_of_modes()))
             # Quick-260505-lqz: refresh LEDs to reflect current _mode_index
-            # immediately on Shift-press. Without this, the LEDs stay stale
-            # (cumulative from prior _set_modes call) until the user presses
-            # one of the 4 buttons.
-            self._set_modes()
+            # immediately on Shift-press. Calling _refresh_mode_leds (not
+            # _set_modes) so we don't re-attach sub-components — in modes
+            # that remap these buttons (e.g. EQ kill-switches in mode 2),
+            # _set_modes would re-bind the sub-component which then reclaims
+            # the LEDs and overwrites the single-active-LED scheme.
+            self._refresh_mode_leds()
 
 
     def number_of_modes(self):
@@ -115,17 +117,28 @@ class EncoderUserModesComponent(ModeSelectorComponent):
                 self.set_mode(idx)
 
 
+    def _refresh_mode_leds(self):
+        # Quick-260505-lqz: single-active-LED indicator while Shift is held.
+        # Mode 0 (no Shift-mode active) → all 4 LEDs OFF;
+        # modes 1/2/3 → only the matching Shift+X button (SendA/B/C) lit.
+        # Called in two paths:
+        #   1. set_mode_buttons (Shift-press): refresh LEDs without re-running
+        #      mode setup — preserves sub-component bindings.
+        #   2. _set_modes (mode change): runs LAST so this scheme overrides
+        #      any LEDs set by sub-component setup (e.g. EQ kill-switches in
+        #      mode 2 set kill-state LEDs via SpecialTrackEQComponent.update).
+        if not self.is_enabled():
+            return
+        for index in range(len(self._modes_buttons)):
+            if self._mode_index != 0 and index == self._mode_index:
+                self._modes_buttons[index].turn_on()
+            else:
+                self._modes_buttons[index].turn_off()
+
+
     def _set_modes(self):
         if self.is_enabled():
             assert (self._mode_index in range(self.number_of_modes()))
-            # Quick-260505-lqz: single-active-LED indicator. In default
-            # mode 0 (no Shift-mode active), all 4 LEDs go dark; in modes
-            # 1-3, only the matching Shift+X button lights up.
-            for index in range(len(self._modes_buttons)):
-                if self._mode_index != 0 and index == self._mode_index:
-                    self._modes_buttons[index].turn_on()
-                else:
-                    self._modes_buttons[index].turn_off()
             for button in self._modes_buttons:
                 button.release_parameter()
                 button.use_default_message()
@@ -177,6 +190,13 @@ class EncoderUserModesComponent(ModeSelectorComponent):
                     control._ring_mode_button.send_value(0)
             else:
                 pass
+
+            # Quick-260505-lqz: refresh LEDs LAST so single-active-LED scheme
+            # overrides LEDs set by sub-component setup above. In mode 2,
+            # EncoderEQComponent.set_controls_and_buttons → set_cut_buttons
+            # → update() lights kill-state LEDs on SendA/B/C; this call
+            # then overwrites them with the shift-mode indicator (SendB only).
+            self._refresh_mode_leds()
             #self._rebuild_callback()
 
 
